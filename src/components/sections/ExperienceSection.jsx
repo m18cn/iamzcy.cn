@@ -1,4 +1,5 @@
 import EditableText from '../EditableText'
+import SectionHeading from '../SectionHeading'
 
 /** 经历卡片字段默认占位文本 */
 const EMPTY_EXP = {
@@ -13,9 +14,11 @@ const EMPTY_EXP = {
  * @param {Object} props
  * @param {Array} props.experiences 经历列表数据
  * @param {Function} props.update (updater: Function) => void 以函数形式更新数组
+ * @param {Object} props.meta 板块标题文案（可编辑）
+ * @param {Function} props.onMetaChange (patch: Object) => void 更新标题文案
  * @param {boolean} props.preview 是否预览模式
  */
-export default function ExperienceSection({ experiences, update, preview }) {
+export default function ExperienceSection({ experiences, update, meta, onMetaChange, preview }) {
   /** 更新指定经历的某个字段 */
   const patchExp = (id, field, value) => {
     update((list) => list.map((e) => (e.id === id ? { ...e, [field]: value } : e)))
@@ -33,9 +36,8 @@ export default function ExperienceSection({ experiences, update, preview }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <p className="kicker">02 / THE JOURNEY</p>
-      <h2 className="sec-title">Work Experience</h2>
-      <p className="sec-sub">个人经历 / 每一段经历都在形成现在的我</p>
+      <SectionHeading meta={meta} onChange={onMetaChange} preview={preview}
+        placeholders={{ kicker: '02 / THE JOURNEY', title: 'Work Experience', sub: '个人经历 / 每一段经历都在形成现在的我' }} />
 
       <div className="timeline">
         {experiences.map((exp, i) => (

@@ -1274,24 +1274,30 @@ body {
 
 /* ============================================
    板块 03 · 个人作品（Bento 网格）
+   卡片一比一复刻对标站：强调色玻璃底（上亮下深）+ 整卡上传区 +
+   右下角"图片/视频"状态胶囊，卡面不再有内嵌虚线框
    ============================================ */
 .works-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  grid-auto-rows: minmax(300px, auto);
+  grid-auto-rows: minmax(320px, auto);
   gap: 20px;
   flex: 1;
 }
 
 .work-card {
   position: relative;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  padding: 18px;
+  /* 卡面底色：强调色玻璃，自上而下由亮转深（对标站的橄榄绿渐变） */
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 20%, #16202a) 0%,
+      color-mix(in srgb, var(--accent) 9%, #111b22) 58%,
+      color-mix(in srgb, var(--accent) 5%, #0b1319) 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, rgba(255, 255, 255, 0.06));
+  border-radius: 22px;
   display: flex;
   flex-direction: column;
-  transition: 0.25s;
+  transition: border-color 0.25s, box-shadow 0.25s;
   overflow: hidden;
 }
 
@@ -1300,12 +1306,48 @@ body {
 }
 
 .work-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.32);
 }
 
-.work-upload {
+/* 空卡上传区：整块可点，提示文字居中 */
+.work-drop {
   flex: 1;
-  min-height: 170px;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 20px;
+  cursor: pointer;
+  color: rgba(245, 248, 246, 0.42);
+  font-size: 13.5px;
+  transition: color 0.2s;
+}
+
+.work-drop:hover {
+  color: rgba(245, 248, 246, 0.75);
+}
+
+/* 选择按钮常态微透明，悬停卡面才完全显现（保持卡面干净） */
+.work-drop-actions {
+  display: flex;
+  gap: 10px;
+  opacity: 0.6;
+  transition: opacity 0.22s;
+}
+
+.work-drop:hover .work-drop-actions,
+.work-drop:focus-within .work-drop-actions {
+  opacity: 1;
+}
+
+/* 缩略图末尾的"继续添加"小块 */
+.work-upload.compact {
+  flex: 0 0 auto;
+  width: 150px;
+  min-height: 150px;
   border-radius: 12px;
   border: 1.5px dashed var(--border-strong);
   display: flex;
@@ -1314,31 +1356,42 @@ body {
   justify-content: center;
   gap: 8px;
   color: var(--text-faint);
-  font-size: 13.5px;
-  cursor: pointer;
+  font-size: 13px;
+  cursor: default;
+  background: rgba(0, 0, 0, 0.14);
   transition: 0.2s;
-  background: rgba(255, 255, 255, 0.015);
-  overflow: hidden;
-  position: relative;
 }
 
-.work-upload:hover {
+.work-upload.compact:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.work-upload .plus {
-  font-size: 24px;
+.work-upload.compact .plus {
+  font-size: 22px;
   font-weight: 300;
 }
 
-/* 已上传媒体预览（轮播缩略图网格） */
+.work-upload-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 小号胶囊按钮（卡内"选图片/选视频"） */
+.btn-xs {
+  min-height: 30px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+/* 已上传媒体预览（横向缩略图条） */
 .work-media {
   flex: 1;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   overflow-x: auto;
-  border-radius: 12px;
+  padding: 16px 16px 0;
   min-height: 150px;
   align-items: stretch;
   scrollbar-width: thin;
@@ -1348,9 +1401,9 @@ body {
   position: relative;
   flex: 0 0 auto;
   width: 150px;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   transition: border-color 0.2s, transform 0.25s, box-shadow 0.25s;
   /* 上传后弹入：让上传动作有明确反馈 */
   animation: m3-card-in 0.5s cubic-bezier(0.22, 0.8, 0.24, 1) both;
@@ -1391,28 +1444,56 @@ body {
   opacity: 1;
 }
 
+/* 文案区：标题/介绍在左，数量胶囊贴在右下角（对齐对标站） */
 .work-body {
-  padding-top: 16px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 20px 20px;
+}
+
+.work-body-main {
+  flex: 1;
+  min-width: 180px;
 }
 
 .work-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .work-desc {
-  color: var(--text-dim);
-  font-size: 13px;
-  margin-bottom: 10px;
+  color: rgba(245, 248, 246, 0.58);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .work-meta {
   display: flex;
-  gap: 16px;
-  color: var(--text-faint);
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 数量胶囊：细描边小药丸 + 图标 */
+.work-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-pill);
+  padding: 7px 14px;
+  color: rgba(245, 248, 246, 0.8);
   font-size: 12px;
-  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.work-pill svg {
+  width: 13px;
+  height: 13px;
+  opacity: 0.85;
 }
 
 .works-footer {

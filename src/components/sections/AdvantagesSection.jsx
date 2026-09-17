@@ -1,4 +1,5 @@
 import EditableText from '../EditableText'
+import SectionHeading from '../SectionHeading'
 
 /** 弧线图标（SVG 装饰） */
 function ArcIcon() {
@@ -26,10 +27,12 @@ function StarIcon() {
  * @param {Object} props
  * @param {Array} props.advantages 优势卡片列表
  * @param {Function} props.update (updater: Function) => void 以函数形式更新数组
+ * @param {Object} props.meta 板块标题文案（可编辑）
+ * @param {Function} props.onMetaChange (patch: Object) => void 更新标题文案
  * @param {boolean} props.preview 是否预览模式
  * @param {Function} props.onGoSection 板块跳转回调
  */
-export default function AdvantagesSection({ advantages, update, preview, onGoSection }) {
+export default function AdvantagesSection({ advantages, update, meta, onMetaChange, preview, onGoSection }) {
   /** 更新指定优势卡片字段 */
   const patchAdv = (id, field, value) => {
     update((list) => list.map((a) => (a.id === id ? { ...a, [field]: value } : a)))
@@ -53,9 +56,8 @@ export default function AdvantagesSection({ advantages, update, preview, onGoSec
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <p className="kicker">04 / WHAT I DO BEST</p>
-      <h2 className="sec-title">Advantages / 个人优势</h2>
-      <p className="sec-sub"></p>
+      <SectionHeading meta={meta} onChange={onMetaChange} preview={preview}
+        placeholders={{ kicker: '04 / WHAT I DO BEST', title: 'Advantages / 个人优势', sub: '把擅长的事，讲清楚' }} />
 
       <div className="adv-grid">
         {advantages.map((adv) => (

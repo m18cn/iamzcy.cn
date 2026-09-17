@@ -30,6 +30,24 @@ export function createDefaultData() {
         { id: uid(), text: '' }
       ]
     },
+    /** 各板块标题文案（与正文一样可直接在页面上编辑） */
+    sections: {
+      experiences: {
+        kicker: '02 / THE JOURNEY',
+        title: 'Work Experience',
+        sub: '个人经历 / 每一段经历都在形成现在的我'
+      },
+      works: {
+        kicker: '03 / THE PRACTITIONER',
+        title: 'Portfolio / 作品集',
+        sub: '每一个作品都是一次深度的表达'
+      },
+      advantages: {
+        kicker: '04 / WHAT I DO BEST',
+        title: 'Advantages / 个人优势',
+        sub: '把擅长的事，讲清楚'
+      }
+    },
     /** 工作经历板块 */
     experiences: [
       {

@@ -63,6 +63,19 @@ function toCompact(data) {
   const defAdv = def.advantages.map((x) => [x.tag, x.title, x.desc, x.icon])
   if (!same(advTuples, defAdv)) c.d = advTuples
 
+  /* —— 板块标题文案（只记与默认不同的字段）—— */
+  const st = {}
+  for (const [key, defVal] of Object.entries(def.sections || {})) {
+    const cur = data.sections?.[key]
+    if (!cur) continue
+    const diff = {}
+    for (const field of ['kicker', 'title', 'sub']) {
+      if (cur[field] !== undefined && cur[field] !== defVal[field]) diff[field] = cur[field]
+    }
+    if (Object.keys(diff).length) st[key] = diff
+  }
+  if (Object.keys(st).length) c.st = st
+
   /* —— 联系我 —— */
   const ct = {}
   if (data.contact) {
@@ -118,6 +131,12 @@ function fromCompact(c) {
     if (Array.isArray(c.c.t)) d.contact.tags = c.c.t
     if (c.c.p !== undefined) d.contact.phone = c.c.p
     if (c.c.q) d.contact.qrCode = c.c.q
+  }
+  /* 板块标题文案差异 */
+  if (c.st) {
+    for (const [key, diff] of Object.entries(c.st)) {
+      d.sections[key] = { ...(d.sections[key] || {}), ...diff }
+    }
   }
   if (c.ac) d.theme.accent = c.ac
 

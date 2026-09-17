@@ -153,6 +153,28 @@ export default function App() {
   }
 
   /**
+   * 更新某个板块的标题文案（kicker / title / sub）
+   * @param {string} key 板块键名（与 data.sections 对应）
+   * @param {Object} patch 标题增量，如 { title: '...' }
+   */
+  const updateSectionMeta = useCallback((key, patch) => {
+    updateData((prev) => ({
+      ...prev,
+      sections: { ...prev.sections, [key]: { ...prev.sections?.[key], ...patch } }
+    }))
+  }, [updateData])
+
+  /**
+   * 生成某板块标题区的编辑回调（预览模式给空操作）
+   * @param {boolean} preview 是否预览模式
+   * @param {string} key 板块键名
+   */
+  const metaProps = (preview, key) => ({
+    meta: viewData.sections?.[key] || {},
+    onMetaChange: preview ? noop : (patch) => updateSectionMeta(key, patch)
+  })
+
+  /**
    * 完整分享链接（把数据压缩进 hash，图片多时字符串很长）
    * 按 data 记忆化：弹窗内输入 Token 等重渲染不再重复压缩
    */
@@ -185,6 +207,7 @@ export default function App() {
           <ExperienceSection
             experiences={viewData.experiences}
             update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, experiences: updater(prev.experiences) }))}
+            {...metaProps(preview, 'experiences')}
             preview={preview}
           />
         </div>
@@ -192,6 +215,7 @@ export default function App() {
           <WorksSection
             works={viewData.works}
             update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, works: updater(prev.works) }))}
+            {...metaProps(preview, 'works')}
             preview={preview}
             onToast={showToast}
           />
@@ -200,6 +224,7 @@ export default function App() {
           <AdvantagesSection
             advantages={viewData.advantages}
             update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, advantages: updater(prev.advantages) }))}
+            {...metaProps(preview, 'advantages')}
             preview={preview}
             onGoSection={goSection}
           />
