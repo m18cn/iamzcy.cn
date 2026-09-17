@@ -2,9 +2,18 @@ import LZString from 'lz-string'
 import { createDefaultData } from '../data/defaultData'
 
 /**
- * 分享链接工具：将作品集数据压缩编码进 URL hash，实现"发送链接即可观看"
- * 数据流：编辑数据 → 差量紧凑格式（仅保留与默认模板不同的部分）→ LZString 压缩 → #/view/<payload>
- * 未修改任何内容时链接极短；图片仍完整携带
+ * 分享工具
+ *
+ * 唯一的分享方式 = 短链接：内容 → 紧凑差量格式 → 提交到仓库
+ * public/shares/<id>.json，链接只保留 #/s/<id>。
+ * - 短：链接里不带图片，随便发微信/群里都不会超长
+ * - 稳：id 存在作品集数据里（data.share.id），再次发布是覆盖同一个文件，
+ *   所以地址不变、内容可更新（覆盖时必须带上文件 sha，见 publishShare）
+ * - 多人多设备：内容是仓库里的静态文件，任何人不登录、不用 Token 都能看，
+ *   读取时带时间戳参数绕过 CDN 缓存，刷新即最新
+ *
+ * 旧的"完整链接"（#/view/<压缩数据>，把图片一起塞进地址栏）不再生成，
+ * 但历史链接仍可正常打开（见 readShareFromLocation）。
  */
 
 /** 生成短随机 ID */
@@ -144,16 +153,8 @@ function fromCompact(c) {
 }
 
 /**
- * 将作品集数据编码为 URL 片段（差量压缩）
- * @param {Object} data 完整作品集数据
- * @returns {string} URL 安全的压缩字符串
- */
-export function encodeSharePayload(data) {
-  return LZString.compressToEncodedURIComponent(JSON.stringify(toCompact(data)))
-}
-
-/**
  * 解码 URL 片段为作品集数据（自动兼容 v2 差量格式与 v1 全量格式）
+ * 仅用于打开历史遗留的 #/view/ 长链接，新内容不再生成这种链接
  * @param {string} payload 压缩字符串
  * @returns {Object|null} 解码后的数据对象，失败返回 null
  */
@@ -170,19 +171,7 @@ export function decodeSharePayload(payload) {
 }
 
 /**
- * 生成完整的分享预览链接
- * @param {Object} data 完整作品集数据
- * @param {string} origin 当前站点地址（默认 location.origin + base 路径）
- * @returns {string} 可直接发送给他人的链接
- */
-export function buildShareUrl(data, origin) {
-  const base = origin || window.location.href.split('#')[0]
-  const payload = encodeSharePayload(data)
-  return `${base}#/view/${payload}`
-}
-
-/**
- * 从当前页面地址中解析分享数据（若存在）
+ * 从当前页面地址中解析分享数据（仅历史遗留的 #/view/ 长链接会命中）
  * @returns {Object|null} 分享数据或 null
  */
 export function readShareFromLocation() {
@@ -195,31 +184,96 @@ export function readShareFromLocation() {
 /* ============================================================
    短链接：把内容发布到仓库，链接里只带一个短 ID
    ------------------------------------------------------------
-   长链接把图片一起塞进地址栏，图片越多链接越长（几十万字符）；
-   短链接改为把内容提交到 GitHub 仓库的 public/shares/<id>.json，
-   链接只保留 #/s/<id>，短且稳定。发布需要一次性的 GitHub Token，
-   只存在浏览器本地，不会写进链接或提交内容。
+   内容提交到 GitHub 仓库的 public/shares/<id>.json，链接只保留
+   #/s/<id>。同一个作品集永远用同一个 id（存在 data.share.id 里），
+   再次发布就是覆盖同一个文件 —— 地址不变，内容更新。
+   发布需要一次性的 GitHub Token，只存在浏览器本地。
    ============================================================ */
 
 /** Token 的 localStorage 键名 */
 const TOKEN_KEY = 'portfolio-editor-gh-token'
 
+/** 手动指定仓库时的 localStorage 键名（自定义域名下无法自动识别时用） */
+const REPO_KEY = 'portfolio-editor-gh-repo'
+
 /** 发布目录（public 下的内容会随构建进入 Pages 站点） */
 const SHARE_DIR = 'public/shares'
 
 /**
- * 推导当前站点的 GitHub 仓库信息（GitHub Pages 形如 <owner>.github.io/<repo>/）
- * @returns {{owner: string, repo: string, branch: string}|null}
+ * 站点配置文件名（放在发布目录里）：
+ * 记录"内容发布在哪个仓库"，发布时自动补上，之后任何设备打开分享链接
+ * 都能直接读仓库里的最新版本（自定义域名下 window.location 里没有仓库信息）
+ */
+const CONFIG_PATH = `${SHARE_DIR}/config.json`
+
+/** 站点配置的页面内缓存（一次加载只取一次） */
+let siteRepoCache
+
+/** 读取单个来源的超时时间（毫秒）：raw 域名在部分地区会被墙，不能让页面卡住 */
+const SOURCE_TIMEOUT = 6000
+
+/**
+ * 首个来源返回后，再等一小会儿其它来源的宽限时间（毫秒）：
+ * 刚更新完内容时，站点上的副本可能还是上一次部署的旧版，
+ * 而仓库直读（raw）已是新内容 —— 这点时间刚好能把更新的那份挑出来
+ */
+const SOURCE_GRACE = 1200
+
+/**
+ * 自动推导当前站点的 GitHub 仓库（GitHub Pages 形如 <owner>.github.io/<repo>/）
+ * @returns {{owner: string, repo: string, branch: string, auto: boolean}|null}
  */
 export function detectRepo() {
   try {
     const m = window.location.hostname.match(/^([\w-]+)\.github\.io$/i)
     if (!m) return null
     const first = window.location.pathname.split('/').filter(Boolean)[0]
-    return { owner: m[1], repo: first || `${m[1]}.github.io`, branch: 'main' }
+    return { owner: m[1], repo: first || `${m[1]}.github.io`, branch: 'main', auto: true }
   } catch {
     return null
   }
+}
+
+/** 读取手动配置的仓库 */
+function readRepoOverride() {
+  try {
+    const raw = localStorage.getItem(REPO_KEY)
+    if (!raw) return null
+    const [owner, repo] = raw.split('/').filter(Boolean)
+    return owner && repo ? { owner, repo, branch: 'main', auto: false } : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 当前使用的仓库：优先自动识别，其次用本地手动配置
+ * （站点绑定了自定义域名时 window.location 里没有仓库信息，只能手动填一次）
+ * @returns {{owner: string, repo: string, branch: string, auto: boolean}|null}
+ */
+export function getShareRepo() {
+  return detectRepo() || readRepoOverride()
+}
+
+/**
+ * 保存 / 清除手动配置的仓库
+ * @param {string} input 形如 owner/repo，也接受完整仓库地址
+ * @returns {{owner: string, repo: string}|null} 解析结果，格式不对返回 null
+ */
+export function setShareRepo(input) {
+  const cleaned = String(input || '')
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, '')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/, '')
+  const [owner, repo] = cleaned.split('/').filter(Boolean)
+  try {
+    if (!owner || !repo) localStorage.removeItem(REPO_KEY)
+    else localStorage.setItem(REPO_KEY, `${owner}/${repo}`)
+  } catch {
+    /* 忽略隐私模式下的写入失败 */
+  }
+  return owner && repo ? { owner, repo } : null
 }
 
 /** 读取本地保存的发布 Token */
@@ -242,7 +296,7 @@ export function setPublishToken(token) {
   return token || ''
 }
 
-/** 生成短 ID（时间戳后缀保证不重复） */
+/** 生成短 ID（首次发布用，之后固定不变） */
 function shortId() {
   return Math.random().toString(36).slice(2, 7) + Date.now().toString(36).slice(-5)
 }
@@ -270,20 +324,47 @@ export function readShortIdFromLocation() {
   return m ? m[1] : null
 }
 
-/**
- * 把作品集内容发布到仓库，得到短链接
- * @param {Object} data 完整作品集数据
- * @param {string} token GitHub Token（需勾选 Contents 读写）
- * @returns {Promise<{id: string, url: string, path: string}>}
- */
-export async function publishShare(data, token) {
-  const info = detectRepo()
-  if (!info) throw new Error('当前不是 GitHub Pages 站点，无法生成短链接')
-  if (!token) throw new Error('请先填写 GitHub Token')
+/** GitHub API 状态码 → 中文提示 */
+function apiHint(status) {
+  return {
+    401: 'Token 无效或已过期，请重新生成',
+    403: 'Token 权限不足：需要勾选 Contents 的读写权限',
+    404: '找不到仓库或无权限：确认仓库名，并让 Token 授权给该仓库'
+  }[status]
+}
 
-  const id = shortId()
-  const path = `${SHARE_DIR}/${id}.json`
-  const res = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}`, {
+/** base64 → 文本 */
+function fromBase64(text) {
+  try {
+    const bin = atob(String(text).replace(/\s/g, ''))
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 读取仓库里的文件
+ * @returns {Promise<{sha: string|null, text: string}>} 不存在时 sha 为 null
+ */
+async function fetchFile(info, path, token) {
+  const res = await fetch(
+    `https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}?ref=${info.branch}`,
+    {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+      cache: 'no-store'
+    }
+  )
+  if (res.status === 404) return { sha: null, text: '' } // 文件还不存在（仓库不对时 PUT 会报更准确的错）
+  if (!res.ok) throw new Error(apiHint(res.status) || `读取仓库失败（HTTP ${res.status}）`)
+  const json = await res.json()
+  return { sha: json.sha || null, text: json.content ? fromBase64(json.content) : '' }
+}
+
+/** 提交（新建或覆盖）仓库里的文件 */
+async function putFile(info, path, token, content, sha, message) {
+  return fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -291,51 +372,192 @@ export async function publishShare(data, token) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      message: `share: ${id}`,
-      content: toBase64(JSON.stringify(toCompact(data))),
-      branch: info.branch
+      message,
+      content,
+      branch: info.branch,
+      ...(sha ? { sha } : {})
     })
   })
+}
 
-  if (!res.ok) {
+/**
+ * 确保站点配置文件存在且指向当前仓库（只在第一次发布或仓库变了时才提交）
+ * 失败不影响分享本身，所以整体 try 住
+ */
+async function ensureSiteConfig(info, token) {
+  try {
+    const body = { owner: info.owner, repo: info.repo, branch: info.branch }
+    const { sha, text } = await fetchFile(info, CONFIG_PATH, token)
+    if (sha && text) {
+      const cur = JSON.parse(text)
+      if (cur.owner === body.owner && cur.repo === body.repo && cur.branch === body.branch) return
+    }
+    await putFile(info, CONFIG_PATH, token, toBase64(JSON.stringify(body)), sha, 'share: 记录发布仓库')
+  } catch {
+    /* 配置写不进去只是少了"发布后立刻可见"，分享本身照常 */
+  }
+}
+
+/**
+ * 解析用户粘贴的分享地址 / 短 ID，取出里面的 ID
+ * 支持 https://xxx/#/s/abc123、abc123、#/s/abc123
+ * @param {string} input
+ * @returns {string} 解析出的 ID，未识别返回空串
+ */
+export function parseShareId(input) {
+  const text = String(input || '').trim()
+  if (!text) return ''
+  const m = text.match(/#\/s\/([\w-]+)/) || text.match(/^[\w-]{4,}$/)
+  return m ? (m[1] || m[0]) : ''
+}
+
+/**
+ * 解析"读取分享内容时用哪个仓库"：
+ * 域名自动识别 → 本机手动配置 → 站点上的 config.json（发布时自动写入）
+ * @returns {Promise<{owner: string, repo: string, branch: string}|null>}
+ */
+async function resolveReadRepo() {
+  const direct = detectRepo() || readRepoOverride()
+  if (direct) return direct
+  if (siteRepoCache !== undefined) return siteRepoCache
+  siteRepoCache = null
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 2500)
+    const res = await fetch(`${import.meta.env.BASE_URL}shares/config.json`, {
+      cache: 'no-store',
+      signal: ctrl.signal
+    })
+    clearTimeout(timer)
+    if (res.ok) {
+      const cfg = await res.json()
+      if (cfg?.owner && cfg?.repo) {
+        siteRepoCache = { owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main' }
+      }
+    }
+  } catch {
+    /* 没有配置就只用站点副本 */
+  }
+  return siteRepoCache
+}
+
+/**
+ * 把作品集内容发布到仓库，得到（或更新）短链接
+ *
+ * 传了 existingId 就是"更新"：覆盖同一个 <id>.json，地址保持不变。
+ * GitHub 覆盖文件必须带上当前文件的 sha，所以先查一次；查询与提交之间
+ * 若文件被改动（sha 过期）会返回 409/422，这里自动重查重试一次。
+ *
+ * @param {Object} data 完整作品集数据
+ * @param {string} token GitHub Token（需勾选 Contents 读写）
+ * @param {string} [existingId] 已存在的短 ID（不传则新建一个）
+ * @returns {Promise<{id: string, url: string, path: string, updated: boolean}>}
+ *          updated 为 true 表示覆盖更新，false 表示首次创建
+ */
+export async function publishShare(data, token, existingId) {
+  const info = getShareRepo()
+  if (!info) throw new Error('无法识别 GitHub 仓库，请先填写 仓库 owner/repo')
+  if (!token) throw new Error('请先填写 GitHub Token')
+
+  const id = existingId || shortId()
+  const path = `${SHARE_DIR}/${id}.json`
+  // u 为内容版本时间戳：观看端用它判断两个来源哪份更新
+  const payload = { ...toCompact(data), u: Date.now() }
+  const content = toBase64(JSON.stringify(payload))
+
+  let { sha } = await fetchFile(info, path, token)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await putFile(
+      info, path, token, content, sha,
+      `${existingId ? 'update' : 'share'}: ${id}`
+    )
+
+    if (res.ok) {
+      // 顺手把"发布仓库"记到站点上，任何设备打开链接都能直读最新内容
+      await ensureSiteConfig(info, token)
+      return { id, url: buildShortUrl(id), path, updated: !!existingId }
+    }
+
+    // sha 过期（刚才有人改过同一个文件）→ 重新查一次再试
+    if ((res.status === 409 || res.status === 422) && attempt < 2) {
+      sha = (await fetchFile(info, path, token)).sha
+      continue
+    }
+
     let detail = ''
     try {
       detail = (await res.json())?.message || ''
     } catch { /* 忽略非 JSON 响应 */ }
-    const hint = {
-      401: 'Token 无效或已过期，请重新生成',
-      403: 'Token 权限不足：需要勾选 Contents 的读写权限',
-      404: '找不到仓库或无权限：Token 需要授权给该仓库',
-      409: '同名文件已存在，请重试'
-    }[res.status]
-    throw new Error(hint || `发布失败（HTTP ${res.status}${detail ? `：${detail}` : ''}）`)
+    throw new Error(apiHint(res.status) || `发布失败（HTTP ${res.status}${detail ? `：${detail}` : ''}）`)
   }
+  throw new Error('发布失败：文件被反复修改，请稍后重试')
+}
 
-  return { id, url: buildShortUrl(id), path }
+/** 读取单个来源的分享文件（失败或超时返回 null） */
+async function readShareFile(src) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), SOURCE_TIMEOUT)
+  try {
+    const res = await fetch(src, { cache: 'no-store', signal: ctrl.signal })
+    if (!res.ok) return null
+    const obj = await res.json()
+    return obj && obj.v === 2 ? obj : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * 并发读取多个来源，返回版本最新（u 最大）的那份
+ * 首个成功的来源返回后最多再等 SOURCE_GRACE，避免页面被慢来源拖住
+ * @param {Promise<Object|null>[]} promises 各来源的读取任务
+ * @returns {Promise<Object|null>}
+ */
+function pickNewest(promises) {
+  return new Promise((resolve) => {
+    let left = promises.length
+    let best = null
+    let graceTimer = null
+    const finish = () => {
+      if (graceTimer) clearTimeout(graceTimer)
+      resolve(best)
+    }
+    for (const p of promises) {
+      p.then((obj) => {
+        if (obj && (!best || (obj.u || 0) > (best.u || 0))) best = obj
+        left -= 1
+        if (obj && !graceTimer) graceTimer = setTimeout(finish, SOURCE_GRACE)
+        if (left === 0) finish()
+      })
+    }
+    if (!promises.length) resolve(null)
+  })
 }
 
 /**
  * 按短 ID 取回已发布的内容
- * 先读同源文件（站点上的 public/shares 副本），失败再回落到 raw.githubusercontent
- * （刚发布时站点还没重新部署，raw 立即可用）
+ * 两个来源并发：仓库直读（raw，发布后立刻生效）与站点上的副本
+ * （<base>/shares/<id>.json，等 Actions 重新部署后才更新）。
+ * 取版本号更新的那份，并强制绕过 CDN 缓存，所以刷新就是最新内容。
  * @param {string} id 短 ID
  * @returns {Promise<Object|null>}
  */
 export async function loadSharedById(id) {
-  const repo = detectRepo()
-  const sources = [`${import.meta.env.BASE_URL}shares/${id}.json`]
-  if (repo) {
-    sources.push(`https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}.json`)
-  }
-  for (const src of sources) {
-    try {
-      const res = await fetch(src, { cache: 'no-cache' })
-      if (!res.ok) continue
-      const obj = await res.json()
-      if (obj && obj.v === 2) return fromCompact(obj)
-    } catch { /* 换下一个来源 */ }
-  }
-  return null
+  const bust = `ts=${Date.now()}`
+  const siteUrl = `${import.meta.env.BASE_URL}shares/${id}.json?${bust}`
+  // 站点副本立刻开始取；仓库直读要先知道仓库名（可能要读一次站点配置）
+  const siteTask = readShareFile(siteUrl)
+  const rawTask = resolveReadRepo().then((repo) => {
+    if (!repo) return null
+    return readShareFile(
+      `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}.json?${bust}`
+    )
+  })
+
+  const picked = await pickNewest([siteTask, rawTask])
+  return picked ? fromCompact(picked) : null
 }
 
 /**

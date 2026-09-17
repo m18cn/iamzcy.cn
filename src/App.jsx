@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { usePortfolio } from './hooks/usePortfolio'
-import {
-  readShareFromLocation, readShortIdFromLocation, loadSharedById, buildShareUrl
-} from './utils/share'
+import { readShareFromLocation, readShortIdFromLocation, loadSharedById } from './utils/share'
 import NavBar from './components/NavBar'
 import ActionBar from './components/ActionBar'
 import ColorPanel from './components/ColorPanel'
@@ -32,8 +30,9 @@ const noop = () => {}
  *   点击"色彩"展开/收起主题色板；编辑内容自动保存到本地
  * - 预览模式：同布局隐藏编辑控件，但保留顶部导航胶囊；
  *   返回编辑 / 生成地址都收进右下操作栏（不再有顶部横幅）
- * - 分享访问：URL 含 #/view/<压缩数据>（免配置长链接）或 #/s/<短ID>
- *   （内容发布在仓库 public/shares 下）时，以只读模式渲染分享者数据
+ * - 分享访问：URL 含 #/s/<短ID>（内容发布在仓库 public/shares 下）时，
+ *   以只读模式渲染分享者数据；历史遗留的 #/view/<压缩数据> 长链接仍可打开
+ *   （只保留读取，不再生成）
  */
 export default function App() {
   const { data, updateData, updateSection, saveNow } = usePortfolio()
@@ -54,6 +53,8 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState('')
   /** 主题色板是否展开 */
   const [colorOpen, setColorOpen] = useState(false)
+  /** 短链接重新加载计数（加载失败页的"重新加载"按钮用） */
+  const [shortReloadKey, setShortReloadKey] = useState(0)
 
   /** 是否只读（分享访问或预览模式） */
   const readonly = !!shareData || mode === MODE.PREVIEW
@@ -76,7 +77,7 @@ export default function App() {
       }
     })
     return () => { alive = false }
-  }, [])
+  }, [shortReloadKey])
 
   // 主题色同步到 CSS 变量
   useEffect(() => {
@@ -175,11 +176,23 @@ export default function App() {
     onMetaChange: preview ? noop : (patch) => updateSectionMeta(key, patch)
   })
 
+  /** 把分享信息（短链接 ID / 更新时间）写回作品集数据 */
+  const updateShare = useCallback((patch) => {
+    updateSection('share', patch)
+  }, [updateSection])
+
   /**
-   * 完整分享链接（把数据压缩进 hash，图片多时字符串很长）
-   * 按 data 记忆化：弹窗内输入 Token 等重渲染不再重复压缩
+   * 分享弹窗：只提供短链接一种方式（内容发布到仓库，地址固定不变）
    */
-  const longShareUrl = useMemo(() => buildShareUrl(data), [data])
+  const shareModal = shareOpen ? (
+    <ShareModal
+      data={data}
+      share={data.share}
+      onShareChange={updateShare}
+      onClose={() => setShareOpen(false)}
+      onToast={showToast}
+    />
+  ) : null
 
   /**
    * 全屏背景底板：始终铺满整个视口（不受 1600px 画布宽度限制）
@@ -261,11 +274,19 @@ export default function App() {
         {backdrop}
         <div className="share-loading error">
           <p className="share-loading-title">分享内容不存在或已被删除</p>
-          <p className="share-loading-tip">请确认链接是否完整，或让对方重新生成一次分享链接。</p>
-          <button className="btn btn-primary" onClick={() => {
-            setShortState('idle')
-            window.location.hash = ''
-          }}>返回编辑器</button>
+          <p className="share-loading-tip">
+            请确认链接是否完整。如果分享者刚更新过内容（或刚部署完站点），
+            稍等片刻重新加载就好。
+          </p>
+          <div className="share-loading-actions">
+            <button className="btn btn-primary" onClick={() => setShortReloadKey((k) => k + 1)}>
+              重新加载
+            </button>
+            <button className="btn btn-ghost" onClick={() => {
+              setShortState('idle')
+              window.location.hash = ''
+            }}>返回编辑器</button>
+          </div>
         </div>
       </>
     )
@@ -305,9 +326,7 @@ export default function App() {
           onShare={() => setShareOpen(true)}
         />
         <ColorPanel accent={data.theme.accent} onPick={pickColor} open={colorOpen} />
-        {shareOpen && (
-          <ShareModal url={longShareUrl} data={data} onClose={() => setShareOpen(false)} onToast={showToast} />
-        )}
+        {shareModal}
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </>
     )
@@ -331,9 +350,7 @@ export default function App() {
       />
       <ColorPanel accent={data.theme.accent} onPick={pickColor} open={colorOpen} />
 
-      {shareOpen && (
-        <ShareModal url={longShareUrl} data={data} onClose={() => setShareOpen(false)} onToast={showToast} />
-      )}
+      {shareModal}
       {toastMsg && <div className="toast">{toastMsg}</div>}
     </>
   )

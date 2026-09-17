@@ -811,18 +811,21 @@ body {
   text-align: center;
 }
 
+/* 头像悬停提示：只浮出文字，不再压暗 / 模糊照片
+   （参考图里悬停时照片保持原亮度，之前的半透明黑罩会把头像变成灰色） */
 .avatar-tip {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 14, 23, 0.45);
   color: #fff;
   font-size: 14px;
+  font-weight: 600;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.9), 0 0 32px rgba(0, 0, 0, 0.75);
   opacity: 0;
-  transition: 0.2s;
-  backdrop-filter: blur(2px);
+  pointer-events: none;
+  transition: opacity 0.2s;
 }
 
 .avatar-box:hover .avatar-tip {
@@ -2092,6 +2095,17 @@ body {
   color: var(--accent);
 }
 
+/* 发布按钮旁的外部链接（去创建 Token） */
+.share-link-out {
+  color: var(--accent);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.share-link-out:hover {
+  text-decoration: underline;
+}
+
 /* 短链接加载中 / 加载失败 */
 .share-loading {
   position: relative;
@@ -2119,6 +2133,14 @@ body {
   font-size: 13.5px;
   line-height: 1.8;
   max-width: 460px;
+}
+
+/* 加载失败页的操作区 */
+.share-loading-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
 }
 
 .share-loading-dot {
