@@ -32,7 +32,7 @@ const noop = () => {}
  * - 分享访问（URL 含 #/view/<数据>）：直接以只读模式渲染分享者数据
  */
 export default function App() {
-  const { data, updateData, updateSection, resetAll, saveNow } = usePortfolio()
+  const { data, updateData, updateSection, saveNow } = usePortfolio()
 
   /** URL 中的分享数据（存在即为分享访问模式） */
   const [shareData, setShareData] = useState(() => readShareFromLocation())
@@ -126,66 +126,65 @@ export default function App() {
     updateSection('theme', { accent: color })
   }
 
-  /** 退出编辑：确认后重置全部内容 */
-  const handleExit = () => {
-    if (window.confirm('确定退出吗？将清空本地编辑内容并恢复默认模板。')) {
-      resetAll()
-      setSection('about')
-      setMode(MODE.EDIT)
-      showToast('已重置为默认模板')
-    }
-  }
-
   /** 生成分享链接 */
   const handleShare = () => {
     return buildShareUrl(data)
   }
 
   /**
-   * 渲染全部板块（编辑与预览/分享共用长页布局）
+   * 全屏背景底板：始终铺满整个视口（不受 1600px 画布宽度限制）
+   * 画在 #root 内部而不是 body 上，嵌入宿主页面时底色依然完整
+   */
+  const backdrop = <div className="bg-base" aria-hidden="true" />
+
+  /**
+   * 渲染全部板块（编辑与预览/分享共用长页布局，
+   * 每个 page-sec 自带整屏铺满的背景层，见 global.css 的 .page-sec::before）
    * @param {boolean} preview 是否隐藏编辑控件
    */
   const renderSections = (preview) => (
-    <div className="page-sections">
-      <div className="page-sec" id="sec-about" data-sec="about">
-        <AboutSection
-          about={viewData.about}
-          update={preview ? noop : (patch) => updateSection('about', patch)}
-          preview={preview}
-          onToast={showToast}
-          onGoSection={goSection}
-        />
-      </div>
-      <div className="page-sec" id="sec-experiences" data-sec="experiences">
-        <ExperienceSection
-          experiences={viewData.experiences}
-          update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, experiences: updater(prev.experiences) }))}
-          preview={preview}
-        />
-      </div>
-      <div className="page-sec" id="sec-works" data-sec="works">
-        <WorksSection
-          works={viewData.works}
-          update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, works: updater(prev.works) }))}
-          preview={preview}
-          onToast={showToast}
-        />
-      </div>
-      <div className="page-sec" id="sec-advantages" data-sec="advantages">
-        <AdvantagesSection
-          advantages={viewData.advantages}
-          update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, advantages: updater(prev.advantages) }))}
-          preview={preview}
-          onGoSection={goSection}
-        />
-      </div>
-      <div className="page-sec" id="sec-contact" data-sec="contact">
-        <ContactSection
-          contact={viewData.contact}
-          update={preview ? noop : (patch) => updateSection('contact', patch)}
-          preview={preview}
-          onToast={showToast}
-        />
+    <div className="stage">
+      <div className="page-sections">
+        <div className="page-sec" id="sec-about" data-sec="about">
+          <AboutSection
+            about={viewData.about}
+            update={preview ? noop : (patch) => updateSection('about', patch)}
+            preview={preview}
+            onToast={showToast}
+            onGoSection={goSection}
+          />
+        </div>
+        <div className="page-sec" id="sec-experiences" data-sec="experiences">
+          <ExperienceSection
+            experiences={viewData.experiences}
+            update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, experiences: updater(prev.experiences) }))}
+            preview={preview}
+          />
+        </div>
+        <div className="page-sec" id="sec-works" data-sec="works">
+          <WorksSection
+            works={viewData.works}
+            update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, works: updater(prev.works) }))}
+            preview={preview}
+            onToast={showToast}
+          />
+        </div>
+        <div className="page-sec" id="sec-advantages" data-sec="advantages">
+          <AdvantagesSection
+            advantages={viewData.advantages}
+            update={preview ? noop : (updater) => updateData((prev) => ({ ...prev, advantages: updater(prev.advantages) }))}
+            preview={preview}
+            onGoSection={goSection}
+          />
+        </div>
+        <div className="page-sec" id="sec-contact" data-sec="contact">
+          <ContactSection
+            contact={viewData.contact}
+            update={preview ? noop : (patch) => updateSection('contact', patch)}
+            preview={preview}
+            onToast={showToast}
+          />
+        </div>
       </div>
     </div>
   )
@@ -193,7 +192,8 @@ export default function App() {
   /* ---------- 分享访问模式（只读长页） ---------- */
   if (shareData) {
     return (
-      <div className="stage">
+      <>
+        {backdrop}
         <div className="preview-banner">
           <span>正在查看分享的作品集</span>
           <span className="p-back" onClick={() => {
@@ -203,14 +203,15 @@ export default function App() {
         </div>
         {renderSections(true)}
         {toastMsg && <div className="toast">{toastMsg}</div>}
-      </div>
+      </>
     )
   }
 
   /* ---------- 预览模式（长页滚动 + 顶部横幅） ---------- */
   if (mode === MODE.PREVIEW) {
     return (
-      <div className="stage">
+      <>
+        {backdrop}
         <div className="preview-banner">
           <span>预览模式</span>
           <span className="p-back" onClick={backToEdit}>← 返回编辑</span>
@@ -219,18 +220,18 @@ export default function App() {
         {renderSections(true)}
         {shareOpen && <ShareModal url={handleShare()} onClose={() => setShareOpen(false)} onToast={showToast} />}
         {toastMsg && <div className="toast">{toastMsg}</div>}
-      </div>
+      </>
     )
   }
 
   /* ---------- 编辑模式（全屏分页，下拉整页切换编辑） ---------- */
   return (
     <>
-      <NavBar current={section} onSelect={goSection} onExit={handleExit} />
+      {backdrop}
 
-      <div className="stage">
-        {renderSections(false)}
-      </div>
+      <NavBar current={section} onSelect={goSection} />
+
+      {renderSections(false)}
 
       <ActionBar
         onPreview={enterPreview}

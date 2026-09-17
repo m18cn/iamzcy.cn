@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import EditableText from '../EditableText'
 import { processImageFiles, readFileAsDataURL, compressImage } from '../../utils/image'
 
@@ -79,7 +79,27 @@ function SplitText({ value, onChange, disabled, className = '', step = 92, place
 export default function AboutSection({ about, update, preview, onToast, onGoSection }) {
   const avatarInput = useRef(null)
   const galleryInput = useRef(null)
+  /** dock 容器引用：上传后滚动到最新卡片，让结果立刻可见 */
+  const dockRef = useRef(null)
+  /** 待替换的卡片下标（null 表示本次是追加新图片） */
+  const replaceIndex = useRef(null)
+  /** 高亮计时器 */
+  const flashTimer = useRef(null)
   const [galleryBusy, setGalleryBusy] = useState(false)
+  /** 刚上传/替换完成的卡片 id：短暂强调色高亮，明确反馈上传结果 */
+  const [justAdded, setJustAdded] = useState([])
+
+  // 卸载时清理高亮计时器
+  useEffect(() => () => clearTimeout(flashTimer.current), [])
+
+  /** 高亮刚加入的卡片（1.2s 后自动淡出高亮） */
+  const flashNew = (ids) => {
+    const list = ids.filter(Boolean)
+    if (!list.length) return
+    setJustAdded(list)
+    clearTimeout(flashTimer.current)
+    flashTimer.current = setTimeout(() => setJustAdded([]), 1200)
+  }
 
   /** 触发头像文件选择 */
   const pickAvatar = () => {
@@ -109,21 +129,51 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
       onToast(`最多添加 ${GALLERY_MAX} 张图片`)
       return
     }
+    replaceIndex.current = null
     galleryInput.current?.click()
   }
 
-  /** 批量处理画廊图片上传（自动截断到上限） */
+  /** 点击已上传的卡片：替换该位置的图片 */
+  const replaceGalleryItem = (index) => {
+    if (preview) return
+    replaceIndex.current = index
+    galleryInput.current?.click()
+  }
+
+  /** 批量处理画廊图片上传（替换单张 / 追加多张，自动截断到上限） */
   const onGalleryFiles = async (e) => {
     const files = e.target.files
     if (!files?.length) return
     setGalleryBusy(true)
+    const replaceAt = replaceIndex.current
+    replaceIndex.current = null
+
+    // 情况一：点击某张卡片 → 只替换这一张
+    if (replaceAt !== null) {
+      const [one] = await processImageFiles([files[0]], { maxWidth: 640, quality: 0.68 })
+      setGalleryBusy(false)
+      e.target.value = ''
+      if (!one) return
+      const target = about.gallery[replaceAt]
+      update((a) => ({ gallery: a.gallery.map((g, i) => (i === replaceAt ? { ...g, src: one } : g)) }))
+      flashNew([target?.id])
+      onToast('图片已替换')
+      return
+    }
+
+    // 情况二：追加新图片
     const remain = GALLERY_MAX - about.gallery.length
     const imgs = await processImageFiles(files, { maxWidth: 640, quality: 0.68 })
     const picked = imgs.slice(0, Math.max(remain, 0))
     if (picked.length) {
-      update((a) => ({
-        gallery: [...a.gallery, ...picked.map((src) => ({ id: Math.random().toString(36).slice(2, 9), src }))]
-      }))
+      const items = picked.map((src) => ({ id: Math.random().toString(36).slice(2, 9), src }))
+      update((a) => ({ gallery: [...a.gallery, ...items] }))
+      flashNew(items.map((it) => it.id))
+      // 新卡片追加在队列末尾：自动滚到最右，上传结果立刻可见
+      requestAnimationFrame(() => {
+        const dock = dockRef.current
+        if (dock) dock.scrollTo({ left: dock.scrollWidth, behavior: 'smooth' })
+      })
     }
     setGalleryBusy(false)
     onToast(picked.length < imgs.length ? `已达上限，添加了 ${picked.length} 张图片` : `已添加 ${picked.length} 张图片`)
@@ -155,12 +205,13 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
     update((a) => ({ notes: a.notes.filter((n) => n.id !== id) }))
   }
 
-  /** 编辑模式下的空卡位数量：不足 7 张补齐到 7 张；已满 7 张则在尾部追加 1 张（未达上限时） */
-  const emptySlots = preview ? 0 : (
-    about.gallery.length >= DOCK_SLOTS
-      ? (about.gallery.length < GALLERY_MAX ? 1 : 0)
-      : DOCK_SLOTS - about.gallery.length
-  )
+  /**
+   * 编辑模式下的空卡位数量：
+   * 图片不足 7 张时补齐到 7 张（形成两端上翘的弧形卡片带），
+   * 已有 7 张及以上则不再追加空卡位（与图 1 的 7/16 状态一致），
+   * 继续加图走底部"+ 增加图片"，或点击任意卡片就地替换。
+   */
+  const emptySlots = preview ? 0 : Math.max(0, Math.min(DOCK_SLOTS, GALLERY_MAX) - about.gallery.length)
 
   return (
     <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -275,21 +326,26 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
 
       {/* 底部画廊 dock：两端上翘的弧形卡片带（rotate/lift 内联变量驱动） */}
       <div className="gallery-stage">
-        <div className="gallery-dock">
-          {/* 已上传图片卡 */}
+        <div className="gallery-dock" ref={dockRef}>
+          {/* 已上传图片卡：点击替换该张，右上角 ✕ 删除 */}
           {about.gallery.map((g, i) => (
             <div
               key={g.id}
-              className="dock-item card-parent"
+              className={`dock-item card-parent ${justAdded.includes(g.id) ? 'just-added' : ''}`}
               style={{
                 '--m3-gallery-rotate': `${DOCK_ROTATES[i % DOCK_SLOTS]}deg`,
                 '--m3-gallery-lift': `${DOCK_LIFTS[i % DOCK_SLOTS]}px`,
                 animationDelay: `${(0.08 + i * 0.04).toFixed(2)}s`
               }}
+              onClick={() => replaceGalleryItem(i)}
+              title={preview ? '' : '点击替换这张图片'}
             >
+              {/* 图片下方的"＋"占位：图片解码中或加载失败时可见（与原站一致） */}
+              <span className="dock-empty" aria-hidden="true">+</span>
               <img src={g.src} alt="画廊图片" />
               {!preview && (
-                <button className="g-remove" aria-label="删除图片" onClick={() => removeGalleryItem(g.id)}>×</button>
+                <button className="g-remove" aria-label="删除图片"
+                  onClick={(e) => { e.stopPropagation(); removeGalleryItem(g.id) }}>✕</button>
               )}
             </div>
           ))}
@@ -309,15 +365,17 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
                 disabled={galleryBusy}
                 title="点击上传图片"
               >
-                <span className="dock-empty">{galleryBusy ? '…' : '＋'}</span>
+                <span className="dock-empty">{galleryBusy ? '…' : '+'}</span>
               </button>
             )
           })}
         </div>
         {!preview && (
           <div className="gallery-ctrl">
-            <button className="btn btn-primary btn-sm" onClick={pickGallery}>+ 增加图片</button>
-            <button className="link-btn" onClick={clearGallery}>清空图片</button>
+            <button className="btn btn-primary btn-sm" onClick={pickGallery} disabled={galleryBusy}>
+              {galleryBusy ? '处理中…' : '+ 增加图片'}
+            </button>
+            <button className="link-btn" onClick={clearGallery} disabled={galleryBusy}>清空图片</button>
             <span className="gallery-count">{about.gallery.length}/{GALLERY_MAX}</span>
           </div>
         )}

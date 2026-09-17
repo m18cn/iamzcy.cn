@@ -81,15 +81,18 @@ export function usePortfolio() {
   }, [])
 
   /**
-   * 更新某个一级板块的数据
+   * 更新某个一级板块的数据（增量浅合并）
    * @param {string} sectionKey 板块键名，如 'about' / 'contact' / 'theme'
-   * @param {Object|Function} patch 板块增量数据或 updater 函数
+   * @param {Object|Function} patch 增量数据对象，或基于当前板块返回增量数据的 updater 函数。
+   *   两种形式都只描述"要改的字段"，其余字段保持原值——
+   *   否则上传画廊图片 / 增删便签这类只返回 { gallery } / { notes } 的更新
+   *   会把同板块的其它字段一起清空（渲染随即因字段缺失而报错）。
    */
   const updateSection = useCallback((sectionKey, patch) => {
     setData((prev) => {
-      const section = prev[sectionKey]
-      const next = typeof patch === 'function' ? patch(section) : { ...section, ...patch }
-      return { ...prev, [sectionKey]: next }
+      const section = prev[sectionKey] || {}
+      const delta = typeof patch === 'function' ? patch(section) : patch
+      return { ...prev, [sectionKey]: { ...section, ...delta } }
     })
   }, [])
 
