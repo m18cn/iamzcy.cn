@@ -38,7 +38,6 @@ export default function ShareModal({ url, onClose, onToast }) {
         </div>
         <p className="share-tip">
           链接已做精简压缩：未修改的内容不会写入链接，无需登录，任何人打开即可直接观看。
-          <br />若图片较多导致链接较长，建议同时使用"导出网页"发送完整文件。
         </p>
       </div>
     </div>

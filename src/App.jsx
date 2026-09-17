@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { usePortfolio } from './hooks/usePortfolio'
 import { readShareFromLocation, buildShareUrl } from './utils/share'
-import { downloadStandaloneHtml } from './utils/exportHtml'
 import NavBar from './components/NavBar'
 import ActionBar from './components/ActionBar'
 import ColorPanel from './components/ColorPanel'
@@ -27,7 +26,7 @@ const noop = () => {}
 /**
  * 应用根组件
  * - 编辑模式：全屏分页布局（每个导航板块占满一屏，下拉整页切换），
- *   顶部导航点击平滑滚动到对应板块；右下角操作栏（预览/色彩/导出网页），
+ *   顶部导航点击平滑滚动到对应板块；右下角操作栏（预览/色彩），
  *   点击"色彩"展开/收起主题色板；编辑内容自动保存到本地
  * - 预览模式：同布局隐藏编辑控件，顶部横幅可返回编辑 / 复制分享链接
  * - 分享访问（URL 含 #/view/<数据>）：直接以只读模式渲染分享者数据
@@ -137,13 +136,6 @@ export default function App() {
     }
   }
 
-  /** 导出独立网页文件（先静默保存） */
-  const handleExport = () => {
-    saveNow()
-    downloadStandaloneHtml(data)
-    showToast('网页文件已开始下载')
-  }
-
   /** 生成分享链接 */
   const handleShare = () => {
     return buildShareUrl(data)
@@ -243,7 +235,6 @@ export default function App() {
       <ActionBar
         onPreview={enterPreview}
         onToggleColor={toggleColor}
-        onExport={handleExport}
         colorOpen={colorOpen}
       />
       <ColorPanel accent={data.theme.accent} onPick={pickColor} open={colorOpen} />
