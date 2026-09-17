@@ -173,6 +173,152 @@ export function readShareFromLocation() {
   return decodeSharePayload(match[1])
 }
 
+/* ============================================================
+   短链接：把内容发布到仓库，链接里只带一个短 ID
+   ------------------------------------------------------------
+   长链接把图片一起塞进地址栏，图片越多链接越长（几十万字符）；
+   短链接改为把内容提交到 GitHub 仓库的 public/shares/<id>.json，
+   链接只保留 #/s/<id>，短且稳定。发布需要一次性的 GitHub Token，
+   只存在浏览器本地，不会写进链接或提交内容。
+   ============================================================ */
+
+/** Token 的 localStorage 键名 */
+const TOKEN_KEY = 'portfolio-editor-gh-token'
+
+/** 发布目录（public 下的内容会随构建进入 Pages 站点） */
+const SHARE_DIR = 'public/shares'
+
+/**
+ * 推导当前站点的 GitHub 仓库信息（GitHub Pages 形如 <owner>.github.io/<repo>/）
+ * @returns {{owner: string, repo: string, branch: string}|null}
+ */
+export function detectRepo() {
+  try {
+    const m = window.location.hostname.match(/^([\w-]+)\.github\.io$/i)
+    if (!m) return null
+    const first = window.location.pathname.split('/').filter(Boolean)[0]
+    return { owner: m[1], repo: first || `${m[1]}.github.io`, branch: 'main' }
+  } catch {
+    return null
+  }
+}
+
+/** 读取本地保存的发布 Token */
+export function getPublishToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+/** 保存 / 清除发布 Token（仅本机浏览器） */
+export function setPublishToken(token) {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* 忽略隐私模式下的写入失败 */
+  }
+  return token || ''
+}
+
+/** 生成短 ID（时间戳后缀保证不重复） */
+function shortId() {
+  return Math.random().toString(36).slice(2, 7) + Date.now().toString(36).slice(-5)
+}
+
+/** UTF-8 文本 → base64（GitHub Contents API 要求） */
+function toBase64(text) {
+  const bytes = new TextEncoder().encode(text)
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
+}
+
+/** 短链接地址（#/s/<id>） */
+export function buildShortUrl(id) {
+  const base = window.location.href.split('#')[0]
+  return `${base}#/s/${id}`
+}
+
+/** 读取当前地址里的短链接 id */
+export function readShortIdFromLocation() {
+  const m = (window.location.hash || '').match(/^#\/s\/([\w-]+)$/)
+  return m ? m[1] : null
+}
+
+/**
+ * 把作品集内容发布到仓库，得到短链接
+ * @param {Object} data 完整作品集数据
+ * @param {string} token GitHub Token（需勾选 Contents 读写）
+ * @returns {Promise<{id: string, url: string, path: string}>}
+ */
+export async function publishShare(data, token) {
+  const info = detectRepo()
+  if (!info) throw new Error('当前不是 GitHub Pages 站点，无法生成短链接')
+  if (!token) throw new Error('请先填写 GitHub Token')
+
+  const id = shortId()
+  const path = `${SHARE_DIR}/${id}.json`
+  const res = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}/contents/${path}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: `share: ${id}`,
+      content: toBase64(JSON.stringify(toCompact(data))),
+      branch: info.branch
+    })
+  })
+
+  if (!res.ok) {
+    let detail = ''
+    try {
+      detail = (await res.json())?.message || ''
+    } catch { /* 忽略非 JSON 响应 */ }
+    const hint = {
+      401: 'Token 无效或已过期，请重新生成',
+      403: 'Token 权限不足：需要勾选 Contents 的读写权限',
+      404: '找不到仓库或无权限：Token 需要授权给该仓库',
+      409: '同名文件已存在，请重试'
+    }[res.status]
+    throw new Error(hint || `发布失败（HTTP ${res.status}${detail ? `：${detail}` : ''}）`)
+  }
+
+  return { id, url: buildShortUrl(id), path }
+}
+
+/**
+ * 按短 ID 取回已发布的内容
+ * 先读同源文件（站点上的 public/shares 副本），失败再回落到 raw.githubusercontent
+ * （刚发布时站点还没重新部署，raw 立即可用）
+ * @param {string} id 短 ID
+ * @returns {Promise<Object|null>}
+ */
+export async function loadSharedById(id) {
+  const repo = detectRepo()
+  const sources = [`${import.meta.env.BASE_URL}shares/${id}.json`]
+  if (repo) {
+    sources.push(`https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}.json`)
+  }
+  for (const src of sources) {
+    try {
+      const res = await fetch(src, { cache: 'no-cache' })
+      if (!res.ok) continue
+      const obj = await res.json()
+      if (obj && obj.v === 2) return fromCompact(obj)
+    } catch { /* 换下一个来源 */ }
+  }
+  return null
+}
+
 /**
  * 复制文本到剪贴板（带降级方案）
  * @param {string} text 要复制的文本

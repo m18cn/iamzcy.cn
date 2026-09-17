@@ -12,13 +12,28 @@ import { readFileAsDataURL, compressImage } from '../../utils/image'
  */
 export default function ContactSection({ contact, update, preview, onToast }) {
   const qrInput = useRef(null)
+  /** 标签行容器引用：新增标签后聚焦新标签 */
+  const tagRowRef = useRef(null)
 
-  /** 添加合作标签 */
+  /** 添加一个空标签：占位插入后立刻聚焦输入，添加按钮顺延到最后 */
   const addTag = () => {
-    const text = window.prompt('输入标签内容（如：开放合作）')
-    if (text?.trim()) {
-      update((c) => ({ tags: [...c.tags, text.trim()] }))
-    }
+    update((c) => ({ tags: [...c.tags, ''] }))
+    focusLastTag()
+  }
+
+  /** 聚焦最后一个标签的编辑区 */
+  const focusLastTag = (tries = 0) => {
+    requestAnimationFrame(() => {
+      const list = tagRowRef.current?.querySelectorAll('.tag-chip .editable')
+      const last = list?.[list.length - 1]
+      if (last) last.focus()
+      else if (tries < 3) setTimeout(() => focusLastTag(tries + 1), 45)
+    })
+  }
+
+  /** 修改指定标签文本 */
+  const setTag = (i, text) => {
+    update((c) => ({ tags: c.tags.map((t, idx) => (idx === i ? text : t)) }))
   }
 
   /** 删除指定标签 */
@@ -59,11 +74,12 @@ export default function ContactSection({ contact, update, preview, onToast }) {
           <EditableText as="p" className="contact-desc" value={contact.desc} disabled={preview} multiline
             onChange={(v) => update({ desc: v })} placeholder="联系说明文字" />
 
-          {/* 合作标签 */}
-          <div className="contact-tags">
+          {/* 合作标签：就地编辑，"+ 添加标签"在末尾占位新增一个空标签 */}
+          <div className="contact-tags" ref={tagRowRef}>
             {contact.tags.map((tag, i) => (
-              <span key={`${tag}-${i}`} className="tag-chip">
-                {tag}
+              <span key={i} className="tag-chip">
+                <EditableText as="span" value={tag} disabled={preview}
+                  onChange={(v) => setTag(i, v)} placeholder="标签 / 学历等" />
                 {!preview && <button className="t-del" onClick={() => removeTag(i)}>✕</button>}
               </span>
             ))}

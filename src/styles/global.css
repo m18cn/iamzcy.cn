@@ -223,15 +223,16 @@ body {
 }
 
 /* ---------- 板块舞台（全屏分页，编辑与预览共用） ---------- */
-/* 画布宽度一比一对齐原站 model3-page-inner：1600px + 左右 90px 内边距
+/* 画布宽度对齐对标站：1500px + 左右 95px 内边距（内容区 1310px）。
+   内容区收窄、局内字号放大后，首页左侧文案群才能像参考图那样铺满红框区域。
    注意：宽度上限只约束内容，不约束背景（背景由 .page-sec::before 整屏铺满） */
 .stage {
   min-height: 100vh;
-  padding: 0 clamp(24px, 6vw, 90px);
+  padding: 0 clamp(24px, 6.5vw, 95px);
   display: flex;
   flex-direction: column;
   animation: sectionIn 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-  max-width: 1600px;
+  max-width: 1500px;
   margin: 0 auto;
   width: 100%;
 }
@@ -431,10 +432,10 @@ body {
 /* ============================================
    板块 01 · 关于我（Hero）
    ============================================ */
-/* 左右比例一比一对齐原站 model3-about-layout（782px : 615px，间距 22px） */
+/* 左右比例对齐参考图（内容区 1310px）：左文案群 ~758px : 右头像 ~530px */
 .hero {
   display: grid;
-  grid-template-columns: 1.27fr 1fr;
+  grid-template-columns: 1.43fr 1fr;
   gap: 22px;
   align-items: center;
   flex: 1;
@@ -457,24 +458,24 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 问候语（原站 model3-eyebrow） */
+/* 问候语（原站 model3-eyebrow）：参考图字号约为 13px */
 .hero-hello {
   color: var(--accent);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   margin-bottom: 14px;
 }
 
-/* 大标题：两行结构（原站 model3-hero-title，flex column） */
+/* 大标题：两行结构（原站 model3-hero-title，flex column）
+   参考图字号约为 140px（较原站更大），矮视口由 vh 项自动收敛 */
 .m3-hero-title {
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin: 8px 0 12px;
-  /* 字号同时受宽度与高度约束：矮视口自动收敛，避免标题把整页撑出屏幕 */
-  font-size: clamp(40px, min(7vw, 11.5vh), 104px);
+  font-size: clamp(44px, min(9.2vw, 14vh), 140px);
   font-weight: 900;
   line-height: 0.86;
   letter-spacing: -0.04em;
@@ -498,10 +499,10 @@ body {
   letter-spacing: 0.06em;
 }
 
-/* 职业名称（原站 model3-hero-role） */
+/* 职业名称（原站 model3-hero-role）：参考图约为 34px */
 .m3-hero-role {
   color: var(--accent);
-  font-size: clamp(20px, 2.4vw, 30px);
+  font-size: clamp(22px, 2.6vw, 34px);
   font-weight: 800;
   letter-spacing: -0.03em;
   margin-bottom: 10px;
@@ -510,9 +511,9 @@ body {
 /* 简介（原站 model3-hero-intro） */
 .hero-bio {
   color: rgba(245, 248, 246, 0.7);
-  font-size: 13px;
-  line-height: 1.55;
-  max-width: 470px;
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 520px;
   margin-bottom: 8px;
 }
 
@@ -520,8 +521,15 @@ body {
 .hero-cta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 22px;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* 首页 CTA 胶囊略大于通用按钮（参考图约 177×47） */
+.hero-cta .btn {
+  min-height: 46px;
+  padding: 0 22px;
+  font-size: 15px;
 }
 
 /* ---------- 拆字动画（原站 model3-split-char） ---------- */
@@ -581,29 +589,29 @@ body {
 
 /* ---------- 便签板（原站 model3-note-board） ---------- */
 
-/* 4 列便签网格 */
+/* 4 列便签网格（参考图单卡约 164×65，整块约 690px） */
 .note-board {
   position: relative;
   z-index: 7;
   isolation: isolate;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  width: min(620px, 100%);
-  margin-top: 18px;
+  gap: 12px;
+  width: min(690px, 100%);
+  margin-top: 20px;
 }
 
 /* 便签卡：不规则圆角 + 强调色纸面 + 跳入动画 */
 .note-card {
   position: relative;
-  min-height: 58px;
-  padding: 12px 30px 10px 14px;
+  min-height: 65px;
+  padding: 13px 30px 11px 15px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px 18px 12px 20px;
   color: #081115;
   background: color-mix(in srgb, var(--accent) 78%, #f5f8f6);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
   animation: m3-about-jump-in 0.72s cubic-bezier(0.22, 0.8, 0.24, 1) both;
 }
@@ -611,7 +619,13 @@ body {
 /* 便签卡内文字编辑区继承便签配色 */
 .note-card .editable {
   color: inherit;
-  font-size: 12px;
+  font-size: 13px;
+  min-width: 42px;
+}
+
+/* 空便签（占位态）：文字用半透明，与已填写的便签区分开 */
+.note-card .editable:empty::before {
+  color: rgba(8, 17, 21, 0.42);
 }
 
 .note-card .editable:hover {
@@ -667,16 +681,16 @@ body {
   color: #fff;
 }
 
-/* 添加便签按钮：虚线占位格 */
+/* 添加便签按钮：虚线占位格（始终排在便签卡之后，新便签插入到它前面） */
 .note-add {
   z-index: 30;
-  min-height: 58px;
+  min-height: 65px;
   padding: 10px;
   border: 1px dashed rgba(255, 255, 255, 0.2);
   border-radius: 14px 18px 12px 20px;
   color: rgba(245, 248, 246, 0.62);
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--font);
   cursor: pointer;
   transition: color 0.2s, border-color 0.2s;
@@ -912,6 +926,7 @@ body {
 }
 
 /* 画廊卡片：3/4 竖卡，底部为轴心旋转 + 抬升（内联变量控制）
+   深色玻璃底：比原站更深，图片未加载/为空时露出的底色也更沉稳（对齐图 2）
    尺寸随视口高度伸缩，矮视口自动收窄，整页始终刚好占满一屏 */
 .dock-item {
   position: relative;
@@ -921,7 +936,8 @@ body {
   border: 2px solid transparent;
   border-radius: 20px;
   overflow: hidden;
-  background: linear-gradient(145deg, rgba(28, 45, 54, 0.96), rgba(8, 16, 22, 0.96));
+  background: linear-gradient(150deg, #16242d 0%, #0c161d 52%, #070d12 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transform-origin: center bottom;
   transform: rotate(var(--m3-gallery-rotate, 0deg)) translateY(var(--m3-gallery-lift, 0px));
   transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.28s, box-shadow 0.28s;
@@ -971,17 +987,16 @@ body {
   background: rgba(5, 10, 14, 0.48);
 }
 
-/* 空卡位"＋"上传卡（虚线描边） */
+/* 空卡位"＋"上传卡：实线描边 + 加深底色（对齐图 2，不再用虚线） */
 .dock-item-empty {
-  border-style: dashed;
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.02);
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(150deg, #142129 0%, #0b141a 52%, #060c11 100%);
   font-family: var(--font);
   padding: 0;
 }
 
 .dock-item-empty:hover {
-  border-style: solid;
   border-color: var(--accent);
 }
 
@@ -1034,7 +1049,7 @@ body {
 /* 矮视口（≤900px 高）：压缩标题、分页留白与卡片尺寸，保证单屏容纳 */
 @media (max-height: 900px) {
   .m3-hero-title {
-    font-size: clamp(40px, min(6.4vw, 10.5vh), 84px);
+    font-size: clamp(42px, min(8vw, 12vh), 112px);
   }
 
   .page-sec {
@@ -1105,7 +1120,7 @@ body {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: clamp(64px, 11vw, 150px);
+  font-size: clamp(72px, 14vw, 200px);
   font-weight: 800;
   font-family: Georgia, 'Times New Roman', serif;
   font-style: italic;
@@ -1538,6 +1553,19 @@ body {
   border-color: var(--accent);
 }
 
+/* 标签文本就地编辑：继承胶囊字号，空值时显示占位提示 */
+.tag-chip .editable {
+  color: inherit;
+  font-size: 13px;
+  min-width: 42px;
+}
+
+.tag-chip .editable:hover,
+.tag-chip .editable:focus {
+  background: none;
+  box-shadow: none;
+}
+
 .tag-chip .t-del {
   color: var(--text-faint);
   cursor: pointer;
@@ -1779,10 +1807,127 @@ body {
   white-space: nowrap;
 }
 
+/* 短链接优于完整链接，给出强调色描边与更大的字号 */
+.share-url.short {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--text);
+  font-size: 13.5px;
+  letter-spacing: 0.3px;
+}
+
+/* 分享弹窗分区（短链接 / 完整链接） */
+.share-block {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.share-block:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.share-label {
+  display: block;
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+/* Token 输入行 */
+.share-token-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.share-token-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  padding: 11px 14px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.share-token-input:focus {
+  border-color: var(--accent);
+}
+
+.share-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.share-err {
+  color: #ff8a8a;
+  font-size: 12.5px;
+  line-height: 1.7;
+  margin-bottom: 8px;
+}
+
 .share-tip {
   color: var(--text-faint);
   font-size: 12.5px;
   line-height: 1.8;
+  margin-bottom: 10px;
+}
+
+.share-tip a {
+  color: var(--accent);
+}
+
+/* 短链接加载中 / 加载失败 */
+.share-loading {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.share-loading-title {
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.share-loading-tip {
+  color: var(--text-faint);
+  font-size: 13.5px;
+  line-height: 1.8;
+  max-width: 460px;
+}
+
+.share-loading-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: shareSpin 0.9s linear infinite;
+}
+
+@keyframes shareSpin {
+  to { transform: rotate(360deg); }
 }
 
 /* Toast 提示 */
@@ -1829,9 +1974,17 @@ body.preview-mode .tag-add,
 body.preview-mode .tag-chip .t-del,
 body.preview-mode .now-card .now-close,
 body.preview-mode .avatar-ops,
-body.preview-mode .avatar-tag .n-del,
-body.preview-mode .editable:hover {
+body.preview-mode .avatar-tag .n-del {
   display: none !important;
+  box-shadow: none;
+}
+
+/* 预览 / 分享模式下文本不可编辑：只关掉悬停提示框。
+   注意不能把 .editable:hover 放进上面的 display:none 列表——
+   那会让鼠标扫过的文字整块消失、页面反复抖动（分享链接里点击文字抖动的原因）。 */
+body.preview-mode .editable:hover,
+body.preview-mode .editable:focus {
+  background: none;
   box-shadow: none;
 }
 

@@ -85,9 +85,13 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
   const replaceIndex = useRef(null)
   /** 高亮计时器 */
   const flashTimer = useRef(null)
+  /** 便签板容器引用：新增便签后聚焦新卡 */
+  const noteBoardRef = useRef(null)
   const [galleryBusy, setGalleryBusy] = useState(false)
   /** 刚上传/替换完成的卡片 id：短暂强调色高亮，明确反馈上传结果 */
   const [justAdded, setJustAdded] = useState([])
+  /** 刚添加的便签 id：不做进场延迟，点完立刻可见可输入 */
+  const [newNoteId, setNewNoteId] = useState(null)
 
   // 卸载时清理高亮计时器
   useEffect(() => () => clearTimeout(flashTimer.current), [])
@@ -192,12 +196,24 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
     }
   }
 
-  /** 添加一条便签（左侧便签板） */
+  /** 添加一条便签：
+   *  先在便签板末尾"占位"插入一张空便签卡（显示占位文案），
+   *  添加按钮顺势排到它后面，并立刻聚焦等待输入——不再弹系统 prompt。 */
   const addNote = () => {
-    const text = window.prompt('输入便签内容')
-    if (text?.trim()) {
-      update((a) => ({ notes: [...a.notes, { id: Math.random().toString(36).slice(2, 9), text: text.trim() }] }))
-    }
+    const id = Math.random().toString(36).slice(2, 9)
+    update((a) => ({ notes: [...a.notes, { id, text: '' }] }))
+    setNewNoteId(id)
+    focusLastNote()
+  }
+
+  /** 聚焦最后一张便签的编辑区（新卡挂载后自动进入输入状态） */
+  const focusLastNote = (tries = 0) => {
+    requestAnimationFrame(() => {
+      const list = noteBoardRef.current?.querySelectorAll('.note-card .editable')
+      const last = list?.[list.length - 1]
+      if (last) last.focus()
+      else if (tries < 3) setTimeout(() => focusLastNote(tries + 1), 45)
+    })
   }
 
   /** 删除指定便签 */
@@ -241,17 +257,18 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
             </div>
           </div>
 
-          {/* 便签板：彩色便签卡网格（预览模式下无便签则整板隐藏） */}
+          {/* 便签板：彩色便签卡网格（预览模式下无便签则整板隐藏）
+              点"+ 添加便签"是在末尾占位插入一张空便签卡，添加按钮自然排到它后面 */}
           {(about.notes.length > 0 || !preview) && (
-            <div className="note-board" aria-label="关于我的便签">
+            <div className="note-board" aria-label="关于我的便签" ref={noteBoardRef}>
               {about.notes.map((n, i) => (
                 <div key={n.id} className={`note-card note-var-${i % 3}`}
-                  style={{ animationDelay: `${(0.34 + i * 0.08).toFixed(2)}s` }}>
+                  style={{ animationDelay: n.id === newNoteId ? '0s' : `${(0.34 + i * 0.08).toFixed(2)}s` }}>
                   <EditableText value={n.text} disabled={preview}
                     onChange={(v) => update((a) => ({
                       notes: a.notes.map((x) => (x.id === n.id ? { ...x, text: v } : x))
                     }))}
-                    placeholder="便签内容" />
+                    placeholder="个人标签/学历/教育等" />
                   {!preview && <button className="note-del" aria-label="删除便签" onClick={() => removeNote(n.id)}>×</button>}
                 </div>
               ))}

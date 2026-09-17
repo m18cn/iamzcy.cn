@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { usePortfolio } from './hooks/usePortfolio'
-import { readShareFromLocation, buildShareUrl } from './utils/share'
+import {
+  readShareFromLocation, readShortIdFromLocation, loadSharedById, buildShareUrl
+} from './utils/share'
 import NavBar from './components/NavBar'
 import ActionBar from './components/ActionBar'
 import ColorPanel from './components/ColorPanel'
@@ -29,13 +31,19 @@ const noop = () => {}
  *   顶部导航点击平滑滚动到对应板块；右下角操作栏（预览/色彩），
  *   点击"色彩"展开/收起主题色板；编辑内容自动保存到本地
  * - 预览模式：同布局隐藏编辑控件，顶部横幅可返回编辑 / 复制分享链接
- * - 分享访问（URL 含 #/view/<数据>）：直接以只读模式渲染分享者数据
+ * - 分享访问：URL 含 #/view/<压缩数据>（免配置长链接）或 #/s/<短ID>
+ *   （内容发布在仓库 public/shares 下）时，以只读模式渲染分享者数据
  */
 export default function App() {
   const { data, updateData, updateSection, saveNow } = usePortfolio()
 
   /** URL 中的分享数据（存在即为分享访问模式） */
   const [shareData, setShareData] = useState(() => readShareFromLocation())
+  /**
+   * 短链接（#/s/<id>）的加载状态：
+   * idle 直接看本地编辑内容 / loading 正在取回已发布内容 / error 取回失败 / ready 取回成功
+   */
+  const [shortState, setShortState] = useState(() => (readShortIdFromLocation() ? 'loading' : 'idle'))
   /** 当前高亮板块（导航激活态） */
   const [section, setSection] = useState('about')
   /** 当前模式 */
@@ -50,6 +58,24 @@ export default function App() {
   const readonly = !!shareData || mode === MODE.PREVIEW
   /** 当前渲染的数据来源（分享数据或本地编辑数据） */
   const viewData = shareData || data
+
+  // 短链接访问（#/s/<id>）：异步取回已发布到仓库的内容
+  useEffect(() => {
+    const id = readShortIdFromLocation()
+    if (!id) return
+    let alive = true
+    setShortState('loading')
+    loadSharedById(id).then((shared) => {
+      if (!alive) return
+      if (shared) {
+        setShareData(shared)
+        setShortState('ready')
+      } else {
+        setShortState('error')
+      }
+    })
+    return () => { alive = false }
+  }, [])
 
   // 主题色同步到 CSS 变量
   useEffect(() => {
@@ -126,10 +152,11 @@ export default function App() {
     updateSection('theme', { accent: color })
   }
 
-  /** 生成分享链接 */
-  const handleShare = () => {
-    return buildShareUrl(data)
-  }
+  /**
+   * 完整分享链接（把数据压缩进 hash，图片多时字符串很长）
+   * 按 data 记忆化：弹窗内输入 Token 等重渲染不再重复压缩
+   */
+  const longShareUrl = useMemo(() => buildShareUrl(data), [data])
 
   /**
    * 全屏背景底板：始终铺满整个视口（不受 1600px 画布宽度限制）
@@ -189,6 +216,35 @@ export default function App() {
     </div>
   )
 
+  /* ---------- 短链接加载中 / 加载失败 ---------- */
+  if (!shareData && shortState === 'loading') {
+    return (
+      <>
+        {backdrop}
+        <div className="share-loading">
+          <span className="share-loading-dot" />
+          正在打开分享的作品集…
+        </div>
+      </>
+    )
+  }
+
+  if (!shareData && shortState === 'error') {
+    return (
+      <>
+        {backdrop}
+        <div className="share-loading error">
+          <p className="share-loading-title">分享内容不存在或已被删除</p>
+          <p className="share-loading-tip">请确认链接是否完整，或让对方重新生成一次分享链接。</p>
+          <button className="btn btn-primary" onClick={() => {
+            setShortState('idle')
+            window.location.hash = ''
+          }}>返回编辑器</button>
+        </div>
+      </>
+    )
+  }
+
   /* ---------- 分享访问模式（只读长页） ---------- */
   if (shareData) {
     return (
@@ -198,6 +254,7 @@ export default function App() {
           <span>正在查看分享的作品集</span>
           <span className="p-back" onClick={() => {
             setShareData(null)
+            setShortState('idle')
             window.location.hash = ''
           }}>我也要做一个 →</span>
         </div>
@@ -218,7 +275,9 @@ export default function App() {
           <span className="p-back" onClick={() => setShareOpen(true)}>复制分享链接</span>
         </div>
         {renderSections(true)}
-        {shareOpen && <ShareModal url={handleShare()} onClose={() => setShareOpen(false)} onToast={showToast} />}
+        {shareOpen && (
+          <ShareModal url={longShareUrl} data={data} onClose={() => setShareOpen(false)} onToast={showToast} />
+        )}
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </>
     )
@@ -240,7 +299,9 @@ export default function App() {
       />
       <ColorPanel accent={data.theme.accent} onPick={pickColor} open={colorOpen} />
 
-      {shareOpen && <ShareModal url={handleShare()} onClose={() => setShareOpen(false)} onToast={showToast} />}
+      {shareOpen && (
+        <ShareModal url={longShareUrl} data={data} onClose={() => setShareOpen(false)} onToast={showToast} />
+      )}
       {toastMsg && <div className="toast">{toastMsg}</div>}
     </>
   )
