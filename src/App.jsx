@@ -28,9 +28,10 @@ const noop = () => {}
 /**
  * 应用根组件
  * - 编辑模式：全屏分页布局（每个导航板块占满一屏，下拉整页切换），
- *   顶部导航点击平滑滚动到对应板块；右下角操作栏（预览/色彩），
+ *   顶部导航点击平滑滚动到对应板块；右下角操作栏（预览 / 色彩 / 生成地址），
  *   点击"色彩"展开/收起主题色板；编辑内容自动保存到本地
- * - 预览模式：同布局隐藏编辑控件，顶部横幅可返回编辑 / 复制分享链接
+ * - 预览模式：同布局隐藏编辑控件，但保留顶部导航胶囊；
+ *   返回编辑 / 生成地址都收进右下操作栏（不再有顶部横幅）
  * - 分享访问：URL 含 #/view/<压缩数据>（免配置长链接）或 #/s/<短ID>
  *   （内容发布在仓库 public/shares 下）时，以只读模式渲染分享者数据
  */
@@ -88,10 +89,10 @@ export default function App() {
     document.body.classList.toggle('preview-mode', readonly)
   }, [readonly])
 
-  // 编辑模式下监听滚动：检测占据视口中线的板块，自动高亮导航
-  // （全屏分页布局下，中线检测与 scroll-snap 吸附位置天然对应）
+  // 监听滚动：检测占据视口中线的板块，自动高亮导航
+  // （编辑与预览模式都保留顶部导航胶囊，只有分享访问模式没有导航）
   useEffect(() => {
-    if (readonly) return
+    if (shareData) return
     let ticking = false
     const onScroll = () => {
       if (ticking) return
@@ -117,7 +118,7 @@ export default function App() {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
     }
-  }, [readonly])
+  }, [shareData])
 
   /** 显示 toast 提示（2 秒后自动消失） */
   const showToast = useCallback((msg) => {
@@ -289,17 +290,21 @@ export default function App() {
     )
   }
 
-  /* ---------- 预览模式（长页滚动 + 顶部横幅） ---------- */
+  /* ---------- 预览模式（保留顶部导航 + 右下操作栏） ---------- */
   if (mode === MODE.PREVIEW) {
     return (
       <>
         {backdrop}
-        <div className="preview-banner">
-          <span>预览模式</span>
-          <span className="p-back" onClick={backToEdit}>← 返回编辑</span>
-          <span className="p-back" onClick={() => setShareOpen(true)}>复制分享链接</span>
-        </div>
+        <NavBar current={section} onSelect={goSection} />
         {renderSections(true)}
+        <ActionBar
+          preview
+          onToggleMode={backToEdit}
+          onToggleColor={toggleColor}
+          colorOpen={colorOpen}
+          onShare={() => setShareOpen(true)}
+        />
+        <ColorPanel accent={data.theme.accent} onPick={pickColor} open={colorOpen} />
         {shareOpen && (
           <ShareModal url={longShareUrl} data={data} onClose={() => setShareOpen(false)} onToast={showToast} />
         )}
@@ -318,9 +323,11 @@ export default function App() {
       {renderSections(false)}
 
       <ActionBar
-        onPreview={enterPreview}
+        preview={false}
+        onToggleMode={enterPreview}
         onToggleColor={toggleColor}
         colorOpen={colorOpen}
+        onShare={() => setShareOpen(true)}
       />
       <ColorPanel accent={data.theme.accent} onPick={pickColor} open={colorOpen} />
 

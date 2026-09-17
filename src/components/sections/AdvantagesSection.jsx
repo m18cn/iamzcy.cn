@@ -1,5 +1,9 @@
+import { useCallback, useEffect, useRef } from 'react'
 import EditableText from '../EditableText'
 import SectionHeading from '../SectionHeading'
+
+/** 卡片跟随鼠标倾斜的最大角度（度），越大越夸张 */
+const TILT_MAX = 11
 
 /** 弧线图标（SVG 装饰） */
 function ArcIcon() {
@@ -23,7 +27,81 @@ function StarIcon() {
 }
 
 /**
- * 板块 04 · 个人优势（三列卡片网格）
+ * 是否允许跟随鼠标倾斜：
+ * 只在带指针的桌面设备上开启，且尊重系统"减少动效"偏好
+ */
+function canTilt() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+/**
+ * 单张优势卡片
+ * 1. 鼠标悬停：整卡转为强调色实底（文字/图标反色）
+ * 2. 鼠标移动：按光标在卡片内的位置换算旋转角度，卡片像被"推着"改变朝向
+ *
+ * @param {Object} props
+ * @param {Object} props.adv 优势数据 { id, tag, title, desc, icon }
+ * @param {boolean} props.preview 是否预览模式（不可编辑）
+ * @param {Function} props.onPatch (id, field, value) => void 更新字段
+ * @param {Function} props.onRemove (id) => void 删除卡片
+ */
+function AdvantageCard({ adv, preview, onPatch, onRemove }) {
+  const cardRef = useRef(null)
+  /** 待执行的动画帧句柄（连续 mousemove 只渲染最后一帧） */
+  const frameRef = useRef(0)
+
+  // 卸载时清掉未执行的动画帧，避免操作已移除的节点
+  useEffect(() => () => {
+    if (frameRef.current) cancelAnimationFrame(frameRef.current)
+  }, [])
+
+  /** 鼠标移动：光标越靠边，卡片朝该方向转得越多（角度写入 CSS 变量） */
+  const handleMove = useCallback((e) => {
+    const el = cardRef.current
+    if (!el || !canTilt()) return
+    const rect = el.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+    const px = (e.clientX - rect.left) / rect.width    // 0 ~ 1（左右）
+    const py = (e.clientY - rect.top) / rect.height    // 0 ~ 1（上下）
+    if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    frameRef.current = requestAnimationFrame(() => {
+      el.style.setProperty('--tilt-y', `${((px - 0.5) * 2 * TILT_MAX).toFixed(2)}deg`)
+      el.style.setProperty('--tilt-x', `${(-(py - 0.5) * 2 * TILT_MAX).toFixed(2)}deg`)
+    })
+  }, [])
+
+  /** 鼠标移出：角度归零，由 CSS transition 平滑回弹 */
+  const handleLeave = useCallback(() => {
+    const el = cardRef.current
+    if (!el) return
+    if (frameRef.current) cancelAnimationFrame(frameRef.current)
+    el.style.setProperty('--tilt-x', '0deg')
+    el.style.setProperty('--tilt-y', '0deg')
+  }, [])
+
+  return (
+    <div
+      ref={cardRef}
+      className="adv-card card-parent"
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+    >
+      {!preview && <button className="card-del" onClick={() => onRemove(adv.id)} title="删除优势">✕</button>}
+      <EditableText as="span" className="adv-tag" value={adv.tag} disabled={preview}
+        onChange={(v) => onPatch(adv.id, 'tag', v)} placeholder="01 / CORE" />
+      <EditableText as="h3" className="adv-title" value={adv.title} disabled={preview} multiline
+        onChange={(v) => onPatch(adv.id, 'title', v)} placeholder="优势名称" />
+      <EditableText as="p" className="adv-desc" value={adv.desc} disabled={preview} multiline
+        onChange={(v) => onPatch(adv.id, 'desc', v)} placeholder="描述 / 不填写" />
+      {adv.icon === 'star' ? <StarIcon /> : <ArcIcon />}
+    </div>
+  )
+}
+
+/**
+ * 板块 04 · 个人优势（三列卡片网格，卡片随鼠标改变朝向）
  * @param {Object} props
  * @param {Array} props.advantages 优势卡片列表
  * @param {Function} props.update (updater: Function) => void 以函数形式更新数组
@@ -61,16 +139,13 @@ export default function AdvantagesSection({ advantages, update, meta, onMetaChan
 
       <div className="adv-grid">
         {advantages.map((adv) => (
-          <div key={adv.id} className="adv-card card-parent">
-            {!preview && <button className="card-del" onClick={() => removeAdv(adv.id)} title="删除优势">✕</button>}
-            <EditableText as="span" className="adv-tag" value={adv.tag} disabled={preview}
-              onChange={(v) => patchAdv(adv.id, 'tag', v)} placeholder="01 / CORE" />
-            <EditableText as="h3" className="adv-title" value={adv.title} disabled={preview} multiline
-              onChange={(v) => patchAdv(adv.id, 'title', v)} placeholder="优势名称" />
-            <EditableText as="p" className="adv-desc" value={adv.desc} disabled={preview} multiline
-              onChange={(v) => patchAdv(adv.id, 'desc', v)} placeholder="描述 / 不填写" />
-            {adv.icon === 'star' ? <StarIcon /> : <ArcIcon />}
-          </div>
+          <AdvantageCard
+            key={adv.id}
+            adv={adv}
+            preview={preview}
+            onPatch={patchAdv}
+            onRemove={removeAdv}
+          />
         ))}
       </div>
 

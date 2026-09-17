@@ -2243,6 +2243,28 @@ body.preview-mode .adv-card:hover .editable:focus {
     padding: 11px 16px;
     font-size: 12.5px;
   }
+  /* 个人优势：小屏改为纵向排列，卡片贴合内容高度（不强行拉高留白） */
+  .adv-grid {
+    grid-auto-rows: auto;
+    align-content: start;
+    gap: 14px;
+  }
+  .adv-card {
+    min-height: 176px;
+    padding: 22px;
+  }
+  .adv-title {
+    font-size: 24px;
+  }
+  .adv-tag {
+    margin-bottom: 14px;
+  }
+  .adv-icon {
+    right: 20px;
+    bottom: 18px;
+    width: 42px;
+    height: 42px;
+  }
   /* 主题色弹出面板：缩小并上移，避开操作栏 */
   .theme-pop {
     right: 14px;
