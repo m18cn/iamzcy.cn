@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import EditableText from '../EditableText'
 import SectionHeading from '../SectionHeading'
 import { processImageFiles, processVideoFile } from '../../utils/image'
@@ -6,6 +6,19 @@ import { processImageFiles, processVideoFile } from '../../utils/image'
 /** 图片/视频数量上限（超出时提示，避免 localStorage 溢出） */
 const MAX_IMAGES = 10
 const MAX_VIDEOS = 5
+
+/** 网格最大列数（对标站最多 4 列，每列放 2 张卡片） */
+const MAX_COLS = 4
+
+/** 各视口宽度下允许的最大列数（窄屏收敛，避免卡片被挤扁） */
+function colsForViewport() {
+  if (typeof window === 'undefined') return MAX_COLS
+  const w = window.innerWidth
+  if (w <= 900) return 1
+  if (w <= 1100) return 2
+  if (w <= 1500) return 3
+  return MAX_COLS
+}
 
 /** 图片状态胶囊里的方形图标 */
 function ImageIcon() {
@@ -40,6 +53,25 @@ function PlayIcon() {
  * @param {Function} props.onToast toast 提示回调
  */
 export default function WorksSection({ works, update, meta, onMetaChange, preview, onToast }) {
+  /** 视口允许的最大列数（跟随窗口宽度收敛） */
+  const [maxCols, setMaxCols] = useState(colsForViewport)
+
+  useEffect(() => {
+    const onResize = () => setMaxCols(colsForViewport())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  /**
+   * 网格结构（一比一复刻对标站的自适应规律）：
+   * - 每列放 2 张卡片，列数 = min(视口上限, ⌊卡片数/2⌋ + 1)，最多 4 列
+   *   1 张 → 1 列、2~3 张 → 2 列、4~5 张 → 3 列、6 张以上 → 4 列
+   * - 2 列 × 行数 的槽位若多于卡片数，多出的槽位由首张（剩余 2 个槽位时再加末张）
+   *   跨两行填满，于是 3 张 =「左大 + 右二」、4 张 =「左大 + 中二 + 右大」……
+   */
+  const cols = Math.max(1, Math.min(maxCols, Math.floor(works.length / 2) + 1))
+  const tallCount = Math.max(0, cols * 2 - works.length)
+
   /** 更新指定作品的字段 */
   const patchWork = (id, field, value) => {
     update((list) => list.map((w) => (w.id === id ? { ...w, [field]: value } : w)))
@@ -104,9 +136,22 @@ export default function WorksSection({ works, update, meta, onMetaChange, previe
       <SectionHeading meta={meta} onChange={onMetaChange} preview={preview}
         placeholders={{ kicker: '03 / THE PRACTITIONER', title: 'Portfolio / 作品集', sub: '每一个作品都是一次深度的表达' }} />
 
-      <div className="works-grid">
-        {works.map((work) => (
-          <div key={work.id} className="work-card card-parent">
+      <div className="works-grid" style={{ '--works-cols': cols }}>
+        {works.map((work, i) => {
+          /**
+           * 跨两行的"大卡"：首张固定放第 1 列、末张固定放最后一列（都占第 1~2 行），
+           * 其余卡片交给自动流逐格填充，于是得到对标站的结构：
+           * 3 张=左大+右二、4 张=左大+中二+右大、5 张=左大+中二+右二……
+           */
+          const firstTall = i === 0 && tallCount >= 1
+          const lastTall = i === works.length - 1 && tallCount >= 2
+          const place = firstTall
+            ? { gridColumn: 1, gridRow: '1 / span 2' }
+            : lastTall
+              ? { gridColumn: cols, gridRow: '1 / span 2' }
+              : undefined
+          return (
+          <div key={work.id} className={`work-card card-parent ${place ? 'is-tall' : ''}`} style={place}>
             {!preview && <button className="card-del" onClick={() => removeWork(work.id)} title="删除作品">✕</button>}
 
             {/* 媒体区：无内容时整卡即上传区，有内容时显示缩略图列表 */}
@@ -151,7 +196,8 @@ export default function WorksSection({ works, update, meta, onMetaChange, previe
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {!preview && (

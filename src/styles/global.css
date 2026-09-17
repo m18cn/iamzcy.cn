@@ -345,36 +345,64 @@ body {
   margin-bottom: 44px;
 }
 
-/* ---------- 底部浮动操作栏 ---------- */
+/* ---------- 底部浮动操作栏 ----------
+   预览 / 色彩 / 生成地址 三个按钮包在同一个胶囊容器里（见 ActionBar.jsx），
+   容器只负责描边与毛玻璃底，按钮自身保持胶囊形态 */
 .action-bar {
   position: fixed;
   right: 28px;
   bottom: 26px;
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
   z-index: 50;
+  border-radius: var(--radius-pill);
+  background: rgba(11, 15, 23, 0.78);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42);
 }
 
+/* 组内按钮：默认透明底，悬停浮起一层浅色 */
 .action-btn {
-  padding: 12px 24px;
+  padding: 10px 20px;
   border-radius: var(--radius-pill);
   font-size: 13px;
   font-weight: 600;
   font-family: var(--font);
   cursor: pointer;
-  transition: 0.2s;
-  border: 1px solid var(--border-strong);
-  background: rgba(20, 24, 34, 0.85);
-  color: var(--text);
-  backdrop-filter: blur(14px);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  transition: background 0.2s, color 0.2s, filter 0.2s;
 }
 
 .action-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
 }
 
+/* 首个按钮（预览 / 编辑）：纯文字按钮，悬停转为强调色 */
+.action-btn.plain:hover {
+  color: var(--accent);
+}
+
+/* "色彩"按钮：默认一枚浅色胶囊，展开色板时转为强调色实底（见下方 .active） */
+.action-btn.toggle {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.action-btn.toggle:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--text);
+}
+
+/* 主按钮（生成地址）：强调色实底 */
 .action-btn.primary {
   background: var(--accent);
   color: var(--bg);
@@ -382,8 +410,9 @@ body {
 }
 
 .action-btn.primary:hover {
-  filter: brightness(1.08);
+  background: var(--accent);
   color: var(--bg);
+  filter: brightness(1.08);
 }
 
 /* "色彩"按钮展开色板时的激活态 */
@@ -394,8 +423,9 @@ body {
 }
 
 .action-btn.active:hover {
-  filter: brightness(1.08);
+  background: var(--accent);
   color: var(--bg);
+  filter: brightness(1.08);
 }
 
 /* ---------- 通用卡片删除按钮 ---------- */
@@ -1281,16 +1311,24 @@ body {
 }
 
 /* ============================================
-   板块 03 · 个人作品（等宽四列网格）
-   网格一比一复刻对标站：4 列等宽（2048 视口下卡宽约 415px、间距 20px、
-   卡高约 248px），首张不再跨行；卡片本身是强调色玻璃底 + 整卡上传区
+   板块 03 · 个人作品（自适应网格）
+   网格结构一比一复刻对标站：每列放 2 张卡片，列数由卡片数决定
+   （1 张→1 列、2~3 张→2 列、4~5 张→3 列、6 张以上→4 列，窄屏自动收敛），
+   多余槽位由首张（必要时加末张）跨两行补齐；行高先铺满一屏、再回落到最小值。
+   卡片本身是强调色玻璃底 + 整卡上传区 + 右下角状态胶囊
    ============================================ */
 .works-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: minmax(248px, auto);
+  grid-template-columns: repeat(var(--works-cols, 1), minmax(0, 1fr));
+  grid-auto-rows: minmax(230px, 1fr);
   gap: 20px;
   flex: 1;
+}
+
+/* 跨两行的"大卡"：列位置由组件显式指定（首列 / 末列），
+   这里固定占第 1~2 行，避免自动流把它挤到第 3 行把整页撑高 */
+.work-card.is-tall {
+  grid-row: 1 / span 2;
 }
 
 .work-card {
@@ -1307,19 +1345,6 @@ body {
   flex-direction: column;
   transition: border-color 0.25s, box-shadow 0.25s;
   overflow: hidden;
-}
-
-/* 列数随视口收敛：四列在窄屏会挤，逐级降到 3 / 2 / 1 列 */
-@media (max-width: 1500px) {
-  .works-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1100px) {
-  .works-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .work-card:hover {
@@ -1522,13 +1547,21 @@ body {
 
 /* ============================================
    板块 04 · 个人优势
+   卡片组比标题更窄且居中（对齐参考图比例），卡片高度随视口变化
    ============================================ */
 .adv-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+  /* 卡片高度跟着视口走（上限 470px）：视口越高卡片越高，比例始终接近参考图 */
+  grid-auto-rows: minmax(min(44vh, 320px), min(50vh, 470px));
+  gap: clamp(16px, 1.5vw, 22px);
   flex: 1;
-  align-content: start;
+  align-content: center;
+  width: 100%;
+  max-width: 1060px;
+  margin: 0 auto;
+  /* 倾斜透视点：三张卡共用一个视点，鼠标推着卡片转向更自然 */
+  perspective: 1500px;
 }
 
 .adv-card {
@@ -1536,38 +1569,46 @@ body {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  padding: 28px;
-  min-height: 220px;
+  padding: clamp(26px, 2.1vw, 34px);
+  min-height: 240px;
   display: flex;
   flex-direction: column;
-  transition: 0.25s;
   overflow: hidden;
+  /* 鼠标跟随倾斜：角度由 JS 写入 --tilt-x / --tilt-y（见 AdvantagesSection） */
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.3s, border-color 0.3s, box-shadow 0.3s;
+  will-change: transform;
 }
 
+/* 悬停：整卡转为强调色实底，文字与图标统一反色 */
 .adv-card:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  background: var(--card-hover);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 26px 60px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .adv-tag {
   color: var(--accent);
-  font-size: 11px;
-  letter-spacing: 2.5px;
+  font-size: 11.5px;
+  letter-spacing: 2.6px;
   font-weight: 700;
-  margin-bottom: 16px;
+  margin-bottom: clamp(18px, 2.4vh, 30px);
 }
 
 .adv-title {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.5;
-  margin-bottom: 12px;
+  color: var(--text);
+  font-size: clamp(24px, 2.75vw, 42px);
+  font-weight: 800;
+  line-height: 1.34;
+  letter-spacing: -0.5px;
+  margin-bottom: clamp(12px, 1.6vh, 20px);
 }
 
 .adv-desc {
   color: var(--text-dim);
-  font-size: 13.5px;
-  line-height: 1.95;
+  font-size: clamp(13px, 1vw, 15.5px);
+  line-height: 1.9;
   white-space: pre-wrap;
   flex: 1;
 }
@@ -1575,12 +1616,51 @@ body {
 /* 卡片右下角装饰图标 */
 .adv-icon {
   position: absolute;
-  right: 20px;
-  bottom: 18px;
-  width: 44px;
-  height: 44px;
+  right: clamp(22px, 2vw, 34px);
+  bottom: clamp(20px, 2.2vh, 30px);
+  width: clamp(46px, 3.8vw, 62px);
+  height: clamp(46px, 3.8vw, 62px);
   color: var(--accent);
   opacity: 0.85;
+}
+
+/* ---------- 强调色实底卡片上的反色细节 ---------- */
+.adv-card:hover .adv-tag,
+.adv-card:hover .adv-title,
+.adv-card:hover .adv-icon {
+  color: var(--bg);
+}
+
+.adv-card:hover .adv-desc {
+  color: rgba(7, 16, 23, 0.72);
+}
+
+/* 深色底的就地编辑提示（默认的浅色提示在实底上看不见） */
+.adv-card:hover .editable:hover {
+  background: rgba(7, 16, 23, 0.08);
+  box-shadow: 0 0 0 1px dashed rgba(7, 16, 23, 0.35);
+}
+
+.adv-card:hover .editable:focus {
+  background: rgba(7, 16, 23, 0.1);
+  box-shadow: 0 0 0 1.5px solid rgba(7, 16, 23, 0.5);
+}
+
+.adv-card:hover .editable:empty::before {
+  color: rgba(7, 16, 23, 0.45);
+}
+
+/* 实底卡片上的删除按钮 */
+.adv-card:hover .card-del {
+  background: rgba(7, 16, 23, 0.14);
+  border-color: rgba(7, 16, 23, 0.32);
+  color: rgba(7, 16, 23, 0.75);
+}
+
+.adv-card:hover .card-del:hover {
+  background: rgba(7, 16, 23, 0.28);
+  border-color: var(--bg);
+  color: var(--bg);
 }
 
 .adv-footer {
@@ -1823,7 +1903,7 @@ body {
 .theme-pop {
   position: fixed;
   right: 28px;
-  bottom: 84px;
+  bottom: 92px;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -2095,7 +2175,14 @@ body.preview-mode .dock-item {
   cursor: default;
 }
 
-/* 预览模式顶部提示条 */
+/* 预览模式：实底卡片的深色编辑提示只属于编辑模式，预览下要收干净 */
+body.preview-mode .adv-card:hover .editable:hover,
+body.preview-mode .adv-card:hover .editable:focus {
+  background: none;
+  box-shadow: none;
+}
+
+/* 分享访问顶部提示条（预览模式已改为保留导航胶囊，不再使用该横幅） */
 .preview-banner {
   position: fixed;
   top: 0;
@@ -2120,11 +2207,6 @@ body.preview-mode .dock-item {
   font-weight: 600;
 }
 
-/* 预览模式：只有顶部横幅（无导航胶囊），压缩分页顶部留白 */
-body.preview-mode .page-sec {
-  padding-top: 84px;
-}
-
 /* ============================================
    响应式
    ============================================ */
@@ -2142,10 +2224,7 @@ body.preview-mode .page-sec {
     grid-template-columns: 1fr;
     gap: 36px;
   }
-  .works-grid {
-    grid-template-columns: 1fr;
-    grid-auto-rows: auto;
-  }
+  /* 作品网格列数由 JS 按视口收敛（见 WorksSection 的 maxCols），此处不再覆盖 */
 }
 
 @media (max-width: 760px) {
@@ -2167,7 +2246,7 @@ body.preview-mode .page-sec {
   /* 主题色弹出面板：缩小并上移，避开操作栏 */
   .theme-pop {
     right: 14px;
-    bottom: 66px;
+    bottom: 82px;
     padding: 9px 14px;
     gap: 10px;
   }
