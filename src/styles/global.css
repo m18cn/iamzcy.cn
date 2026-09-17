@@ -2230,31 +2230,6 @@ body.preview-mode .adv-card:hover .editable:focus {
   box-shadow: none;
 }
 
-/* 分享访问顶部提示条（预览模式已改为保留导航胶囊，不再使用该横幅） */
-.preview-banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background: rgba(13, 17, 26, 0.9);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  font-size: 13px;
-  color: var(--text-dim);
-  z-index: 60;
-}
-
-.preview-banner .p-back {
-  color: var(--accent);
-  cursor: pointer;
-  font-weight: 600;
-}
-
 /* ============================================
    响应式
    ============================================ */

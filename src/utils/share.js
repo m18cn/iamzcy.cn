@@ -328,8 +328,8 @@ export function readShortIdFromLocation() {
 function apiHint(status) {
   return {
     401: 'Token 无效或已过期，请重新生成',
-    403: 'Token 权限不足：需要勾选 Contents 的读写权限',
-    404: '找不到仓库或无权限：确认仓库名，并让 Token 授权给该仓库'
+    403: 'Token 权限不足：在 Repository permissions 里把 Contents 设为 Read and write',
+    404: '找不到仓库或无权限：Token 的 Repository access 要勾上该仓库（选 Public repositories 只有只读权限，发布不了）'
   }[status]
 }
 

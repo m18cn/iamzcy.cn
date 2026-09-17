@@ -91,9 +91,8 @@ export default function App() {
   }, [readonly])
 
   // 监听滚动：检测占据视口中线的板块，自动高亮导航
-  // （编辑与预览模式都保留顶部导航胶囊，只有分享访问模式没有导航）
+  // （编辑、预览、分享访问三种模式都保留顶部导航胶囊）
   useEffect(() => {
-    if (shareData) return
     let ticking = false
     const onScroll = () => {
       if (ticking) return
@@ -119,7 +118,7 @@ export default function App() {
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
     }
-  }, [shareData])
+  }, [])
 
   /** 显示 toast 提示（2 秒后自动消失） */
   const showToast = useCallback((msg) => {
@@ -292,19 +291,12 @@ export default function App() {
     )
   }
 
-  /* ---------- 分享访问模式（只读长页） ---------- */
+  /* ---------- 分享访问模式（只读长页，保留顶部导航；不显示任何编辑/横幅） ---------- */
   if (shareData) {
     return (
       <>
         {backdrop}
-        <div className="preview-banner">
-          <span>正在查看分享的作品集</span>
-          <span className="p-back" onClick={() => {
-            setShareData(null)
-            setShortState('idle')
-            window.location.hash = ''
-          }}>我也要做一个 →</span>
-        </div>
+        <NavBar current={section} onSelect={goSection} />
         {renderSections(true)}
         {toastMsg && <div className="toast">{toastMsg}</div>}
       </>

@@ -195,7 +195,7 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
           {repo ? (
             <p className="share-tip">
               内容会提交到仓库 <code>{repo.owner}/{repo.repo}</code> 的 public/shares 目录，
-              链接只保留一个短 ID；Token 不会写进链接、也不会提交。
+              Token 只存在本机浏览器，不会写进链接、也不会提交。
             </p>
           ) : (
             <p className="share-tip">
@@ -203,6 +203,15 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
               owner/repo（例如 m18cn/iamzcy.cn）后再生成。
             </p>
           )}
+
+          <p className="share-tip">
+            新建 Token 三步：① Repository access 选「Only select repositories」并勾上{' '}
+            <code>{repo ? `${repo.owner}/${repo.repo}` : '你的仓库'}</code>
+            （选「Public repositories」只有只读权限，发布不了）；
+            ② 继续往下滚到 <b>Repository permissions</b>，把 <b>Contents</b> 设为{' '}
+            <b>Read and write</b>（不在 Account permissions 那个下拉里）；
+            ③ 生成后粘到上面输入框点「保存」。
+          </p>
 
           {error && <p className="share-err">{error}</p>}
 
