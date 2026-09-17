@@ -223,16 +223,17 @@ body {
 }
 
 /* ---------- 板块舞台（全屏分页，编辑与预览共用） ---------- */
-/* 画布宽度对齐对标站：1500px + 左右 95px 内边距（内容区 1310px）。
-   内容区收窄、局内字号放大后，首页左侧文案群才能像参考图那样铺满红框区域。
-   注意：宽度上限只约束内容，不约束背景（背景由 .page-sec::before 整屏铺满） */
+/* 内容区宽度对齐对标站：左右 8vw 内边距（2048 宽视口下内容约 1720px，
+   与参考图作品区实测 1732px 一致；1264 视口下约 1060px，也与参考图吻合）。
+   首页 hero 是例外：对标站的首页内容块单独收窄到 1310px 居中（见 .hero）。
+   宽度上限只约束内容，不约束背景（背景由 .page-sec::before 整屏铺满） */
 .stage {
   min-height: 100vh;
-  padding: 0 clamp(24px, 6.5vw, 95px);
+  padding: 0 clamp(24px, 8vw, 240px);
   display: flex;
   flex-direction: column;
   animation: sectionIn 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-  max-width: 1500px;
+  max-width: 2100px;
   margin: 0 auto;
   width: 100%;
 }
@@ -432,7 +433,7 @@ body {
 /* ============================================
    板块 01 · 关于我（Hero）
    ============================================ */
-/* 左右比例对齐参考图（内容区 1310px）：左文案群 ~758px : 右头像 ~530px */
+/* 左右比例对齐参考图（首页内容块 1310px）：左文案群 ~758px : 右头像 ~530px */
 .hero {
   display: grid;
   grid-template-columns: 1.43fr 1fr;
@@ -440,6 +441,10 @@ body {
   align-items: center;
   flex: 1;
   min-height: 0;            /* 允许在矮视口下收缩，避免整页溢出 */
+  /* 首页内容块单独收窄居中：对标站的 hero 比其它板块更窄 */
+  width: 100%;
+  max-width: 1310px;
+  margin: 0 auto;
 }
 
 /* 左侧文案集群（原站 model3-about-left-cluster） */
@@ -902,9 +907,12 @@ body {
    左右邻卡跟随轻微放大，形成焦点层次
    ============================================ */
 .gallery-stage {
-  margin-top: 20px;
+  margin: 22px auto 0;
   position: relative;
   z-index: 1;               /* 压在 PORTFOLIO 水印之上 */
+  /* 与首页 hero 同宽居中（画廊与文案群对齐） */
+  width: 100%;
+  max-width: 1310px;
 }
 
 /* dock 容器：底部对齐居中排布，顶部预留悬停放大的空间（约为卡片放大后的增量） */
@@ -1273,14 +1281,14 @@ body {
 }
 
 /* ============================================
-   板块 03 · 个人作品（Bento 网格）
-   卡片一比一复刻对标站：强调色玻璃底（上亮下深）+ 整卡上传区 +
-   右下角"图片/视频"状态胶囊，卡面不再有内嵌虚线框
+   板块 03 · 个人作品（等宽四列网格）
+   网格一比一复刻对标站：4 列等宽（2048 视口下卡宽约 415px、间距 20px、
+   卡高约 248px），首张不再跨行；卡片本身是强调色玻璃底 + 整卡上传区
    ============================================ */
 .works-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-auto-rows: minmax(320px, auto);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: minmax(248px, auto);
   gap: 20px;
   flex: 1;
 }
@@ -1301,8 +1309,17 @@ body {
   overflow: hidden;
 }
 
-.work-card:first-child {
-  grid-row: span 2;
+/* 列数随视口收敛：四列在窄屏会挤，逐级降到 3 / 2 / 1 列 */
+@media (max-width: 1500px) {
+  .works-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .works-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .work-card:hover {
@@ -1313,16 +1330,16 @@ body {
 /* 空卡上传区：整块可点，提示文字居中 */
 .work-drop {
   flex: 1;
-  min-height: 150px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 28px 20px;
+  gap: 12px;
+  padding: 22px 18px;
   cursor: pointer;
   color: rgba(245, 248, 246, 0.42);
-  font-size: 13.5px;
+  font-size: 13px;
   transition: color 0.2s;
 }
 
@@ -1449,31 +1466,31 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 18px 20px 20px;
+  padding: 16px 18px 18px;
 }
 
 .work-body-main {
   flex: 1;
-  min-width: 180px;
+  min-width: 150px;
 }
 
 .work-title {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .work-desc {
   color: rgba(245, 248, 246, 0.58);
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .work-meta {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -1481,18 +1498,18 @@ body {
 .work-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-pill);
-  padding: 7px 14px;
+  padding: 6px 12px;
   color: rgba(245, 248, 246, 0.8);
-  font-size: 12px;
+  font-size: 11.5px;
   white-space: nowrap;
 }
 
 .work-pill svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
   opacity: 0.85;
 }
 
@@ -2128,9 +2145,6 @@ body.preview-mode .page-sec {
   .works-grid {
     grid-template-columns: 1fr;
     grid-auto-rows: auto;
-  }
-  .work-card:first-child {
-    grid-row: auto;
   }
 }
 
