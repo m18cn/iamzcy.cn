@@ -110,17 +110,19 @@ export function buildStandaloneHtml(data) {
 <style>
 :root { --accent: ${accent}; --bg: #0a0e17; --card: rgba(255,255,255,.04); --border: rgba(255,255,255,.09); }
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
 body { background: var(--bg); color: #fff; font-family: 'PingFang SC','Microsoft YaHei',-apple-system,sans-serif; overflow-x: hidden; }
 ::selection { background: var(--accent); color: #0a0e17; }
 nav { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; background: rgba(13,17,26,.72); border: 1px solid var(--border); border-radius: 999px; padding: 6px; backdrop-filter: blur(16px); z-index: 100; }
 nav a { color: rgba(255,255,255,.65); text-decoration: none; font-size: 13px; padding: 8px 16px; border-radius: 999px; transition: .2s; white-space: nowrap; }
 nav a:hover { color: #fff; background: rgba(255,255,255,.08); }
-section { max-width: 1080px; margin: 0 auto; padding: 110px 24px 60px; position: relative; }
+/* 每个板块占满一屏，下拉整页切换（与编辑器一致的分页体验） */
+section { max-width: 1080px; margin: 0 auto; padding: 110px 24px 60px; position: relative; min-height: 100vh; min-height: 100svh; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; justify-content: center; }
 .kicker { color: var(--accent); font-size: 12px; letter-spacing: 3px; font-weight: 600; margin-bottom: 14px; }
 h2.sec-title { font-size: clamp(34px, 5vw, 56px); font-weight: 800; letter-spacing: -1px; margin-bottom: 10px; }
 .sec-sub { color: rgba(255,255,255,.45); font-size: 14px; margin-bottom: 48px; }
 /* Hero */
-.hero { display: grid; grid-template-columns: 1.2fr .8fr; gap: 48px; align-items: center; min-height: 82vh; }
+.hero { display: grid; grid-template-columns: 1.2fr .8fr; gap: 48px; align-items: center; }
 .hello { color: var(--accent); font-size: 13px; letter-spacing: 3px; margin-bottom: 18px; }
 .h-name { font-size: clamp(44px, 7vw, 84px); font-weight: 800; color: var(--accent); letter-spacing: -2px; line-height: 1.05; }
 .h-sub { font-size: clamp(20px, 2.4vw, 28px); font-weight: 700; letter-spacing: 6px; margin: 10px 0 6px; }
@@ -133,10 +135,11 @@ h2.sec-title { font-size: clamp(34px, 5vw, 56px); font-weight: 800; letter-spaci
 .btn-ghost { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
 .avatar-wrap { position: relative; }
-.avatar-box { aspect-ratio: 3/4; border-radius: 28px; overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+.avatar-box { aspect-ratio: 1/1; max-width: 360px; border-radius: 50%; overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+.avatar-box.shape-rounded { border-radius: 40px; }
 .avatar-box img { width: 100%; height: 100%; object-fit: cover; }
 .ph-avatar { display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,.35); font-size: 14px; }
-.now-card { position: absolute; left: -24px; bottom: 28px; background: rgba(13,17,26,.9); border: 1px solid var(--accent); border-radius: 14px; padding: 10px 16px; font-size: 12px; }
+.now-card { position: absolute; right: -14px; bottom: 24px; background: rgba(13,17,26,.9); border: 1px solid var(--accent); border-radius: 14px; padding: 10px 16px; font-size: 12px; }
 .now-card b { color: var(--accent); letter-spacing: 2px; display: block; margin-bottom: 4px; }
 /* Gallery */
 .gallery { display: flex; gap: 14px; overflow-x: auto; padding: 8px 4px 16px; margin-top: 60px; scrollbar-width: thin; }
@@ -219,7 +222,7 @@ footer { text-align: center; color: rgba(255,255,255,.3); font-size: 12px; paddi
       </div>
     </div>
     <div class="avatar-wrap">
-      <div class="avatar-box">${avatarHtml}</div>
+      <div class="avatar-box ${about.avatarShape === 'rounded' ? 'shape-rounded' : ''}">${avatarHtml}</div>
       ${about.nowBadge?.visible ? `<div class="now-card"><b>NOW</b>${esc(about.nowBadge.text)}</div>` : ''}
     </div>
   </div>

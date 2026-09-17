@@ -26,8 +26,9 @@ const noop = () => {}
 
 /**
  * 应用根组件
- * - 编辑模式：全部板块纵向排布的长页，可下拉滚动编辑；顶部导航点击平滑滚动到对应板块
- *   右下角常驻主题色横向面板 + 操作栏（预览/保存/导出网页）
+ * - 编辑模式：全屏分页布局（每个导航板块占满一屏，下拉整页切换），
+ *   顶部导航点击平滑滚动到对应板块；右下角操作栏（预览/色彩/导出网页），
+ *   点击"色彩"展开/收起主题色板；编辑内容自动保存到本地
  * - 预览模式：同布局隐藏编辑控件，顶部横幅可返回编辑 / 复制分享链接
  * - 分享访问（URL 含 #/view/<数据>）：直接以只读模式渲染分享者数据
  */
@@ -43,6 +44,8 @@ export default function App() {
   /** 弹窗与 toast */
   const [shareOpen, setShareOpen] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
+  /** 主题色板是否展开 */
+  const [colorOpen, setColorOpen] = useState(false)
 
   /** 是否只读（分享访问或预览模式） */
   const readonly = !!shareData || mode === MODE.PREVIEW
@@ -60,22 +63,35 @@ export default function App() {
     document.body.classList.toggle('preview-mode', readonly)
   }, [readonly])
 
-  // 编辑模式下监听滚动，自动高亮当前可见板块
+  // 编辑模式下监听滚动：检测占据视口中线的板块，自动高亮导航
+  // （全屏分页布局下，中线检测与 scroll-snap 吸附位置天然对应）
   useEffect(() => {
     if (readonly) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((en) => {
-          if (en.isIntersecting) setSection(en.target.dataset.sec)
-        })
-      },
-      { rootMargin: '-30% 0px -60% 0px', threshold: 0 }
-    )
-    SECTION_KEYS.forEach((k) => {
-      const el = document.getElementById(`sec-${k}`)
-      if (el) observer.observe(el)
-    })
-    return () => observer.disconnect()
+    let ticking = false
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        const mid = window.innerHeight / 2
+        for (const k of SECTION_KEYS) {
+          const el = document.getElementById(`sec-${k}`)
+          if (!el) continue
+          const rect = el.getBoundingClientRect()
+          if (rect.top <= mid && rect.bottom >= mid) {
+            setSection(k)
+            break
+          }
+        }
+        ticking = false
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [readonly])
 
   /** 显示 toast 提示（2 秒后自动消失） */
@@ -90,8 +106,9 @@ export default function App() {
     document.getElementById(`sec-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
-  /** 进入预览模式 */
+  /** 进入预览模式（先静默保存，防止防抖未落盘） */
   const enterPreview = () => {
+    saveNow()
     setMode(MODE.PREVIEW)
     window.scrollTo({ top: 0 })
   }
@@ -101,6 +118,9 @@ export default function App() {
     setMode(MODE.EDIT)
     window.scrollTo({ top: 0 })
   }
+
+  /** 切换主题色板展开/收起 */
+  const toggleColor = () => setColorOpen((v) => !v)
 
   /** 选择主题色 */
   const pickColor = (color) => {
@@ -117,14 +137,9 @@ export default function App() {
     }
   }
 
-  /** 立即保存到本地浏览器 */
-  const handleSave = () => {
-    const ok = saveNow()
-    showToast(ok ? '已保存到本地浏览器' : '保存失败，内容可能超出容量')
-  }
-
-  /** 导出独立网页文件 */
+  /** 导出独立网页文件（先静默保存） */
   const handleExport = () => {
+    saveNow()
     downloadStandaloneHtml(data)
     showToast('网页文件已开始下载')
   }
@@ -216,7 +231,7 @@ export default function App() {
     )
   }
 
-  /* ---------- 编辑模式（长页滚动，可下拉编辑全部板块） ---------- */
+  /* ---------- 编辑模式（全屏分页，下拉整页切换编辑） ---------- */
   return (
     <>
       <NavBar current={section} onSelect={goSection} onExit={handleExit} />
@@ -225,8 +240,13 @@ export default function App() {
         {renderSections(false)}
       </div>
 
-      <ActionBar onPreview={enterPreview} onSave={handleSave} onExport={handleExport} />
-      <ColorPanel accent={data.theme.accent} onPick={pickColor} />
+      <ActionBar
+        onPreview={enterPreview}
+        onToggleColor={toggleColor}
+        onExport={handleExport}
+        colorOpen={colorOpen}
+      />
+      <ColorPanel accent={data.theme.accent} onPick={pickColor} open={colorOpen} />
 
       {shareOpen && <ShareModal url={handleShare()} onClose={() => setShareOpen(false)} onToast={showToast} />}
       {toastMsg && <div className="toast">{toastMsg}</div>}

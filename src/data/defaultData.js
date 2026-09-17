@@ -22,6 +22,7 @@ export function createDefaultData() {
       title: '职业名称',
       bio: '写一句关于你的简介，让别人快速了解你。',
       avatar: null,            // 头像图片 base64
+      avatarShape: 'circle',   // 头像形状：circle 圆形 / rounded 圆角胶囊
       nowBadge: { text: '开放合作 / 作品交流', visible: true }, // NOW 浮动卡片
       gallery: [],             // 底部横向画廊图片数组 [{id, src}]
       notes: [                 // 便签（头像浮动标签）数组 [{id, text}]

@@ -31,6 +31,8 @@ function toCompact(data) {
     if (data.about.title !== def.about.title) a.t = data.about.title
     if (data.about.bio !== def.about.bio) a.b = data.about.bio
     if (data.about.avatar) a.av = data.about.avatar
+    // 头像形状：与默认（圆形）不同才写入
+    if (data.about.avatarShape && data.about.avatarShape !== def.about.avatarShape) a.sh = data.about.avatarShape
     if (data.about.nowBadge) {
       const nb = {}
       if (data.about.nowBadge.text !== def.about.nowBadge.text) nb.t = data.about.nowBadge.text
@@ -94,6 +96,7 @@ function fromCompact(c) {
     if (c.a.t !== undefined) a.title = c.a.t
     if (c.a.b !== undefined) a.bio = c.a.b
     if (c.a.av) a.avatar = c.a.av
+    if (c.a.sh) a.avatarShape = c.a.sh
     if (c.a.nw) a.nowBadge = { text: c.a.nw.t ?? a.nowBadge.text, visible: c.a.nw.v !== 0 }
     if (Array.isArray(c.a.g)) a.gallery = c.a.g.map((src) => ({ id: uid(), src }))
     if (Array.isArray(c.a.nt)) a.notes = c.a.nt.map((text) => ({ id: uid(), text }))

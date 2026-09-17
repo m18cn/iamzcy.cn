@@ -139,8 +139,11 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
 
         {/* 右侧头像区 */}
         <div className="avatar-wrap">
-          {/* 圆形头像主体 */}
-          <div className="avatar-box card-parent" onClick={pickAvatar}>
+          {/* 头像主体（圆形 / 圆角胶囊两种形状可切换） */}
+          <div
+            className={`avatar-box card-parent ${about.avatarShape === 'rounded' ? 'shape-rounded' : ''}`}
+            onClick={pickAvatar}
+          >
             {about.avatar ? (
               <img src={about.avatar} alt="头像" />
             ) : (
@@ -151,6 +154,24 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
             )}
             {!preview && <div className="avatar-tip">点击替换头像</div>}
           </div>
+
+          {/* 头像形状切换胶囊（编辑模式，头像下方居中） */}
+          {!preview && (
+            <div className="shape-toggle">
+              <button
+                className={`st-btn ${about.avatarShape !== 'rounded' ? 'active' : ''}`}
+                onClick={() => update({ avatarShape: 'circle' })}
+              >
+                圆形胶囊
+              </button>
+              <button
+                className={`st-btn ${about.avatarShape === 'rounded' ? 'active' : ''}`}
+                onClick={() => update({ avatarShape: 'rounded' })}
+              >
+                圆角胶囊
+              </button>
+            </div>
+          )}
 
           {/* 封面操作胶囊按钮（编辑模式，位于圆形头像上方） */}
           {!preview && about.avatar && (
