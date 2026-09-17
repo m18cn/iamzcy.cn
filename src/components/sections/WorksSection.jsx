@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import EditableText from '../EditableText'
 import SectionHeading from '../SectionHeading'
 import { processImageFiles, processVideoFile } from '../../utils/image'
@@ -40,11 +41,78 @@ function PlayIcon() {
 }
 
 /**
+ * 媒体大图浏览层（点封面或「点击预览」打开）
+ * 键盘：Esc 关闭、← → 切换；编辑模式下可直接删掉当前这张
+ *
+ * @param {Object} props
+ * @param {Array} props.media 媒体列表 [{ type: 'image'|'video', src }]
+ * @param {number} props.index 当前序号
+ * @param {boolean} props.preview 是否预览模式（不给删除入口）
+ * @param {Function} props.onIndex (next: number) => void
+ * @param {Function} props.onClose () => void
+ * @param {Function} props.onRemove (index: number) => void
+ */
+function MediaViewer({ media, index, preview, onIndex, onClose, onRemove }) {
+  const total = media.length
+  const current = media[Math.min(index, total - 1)] || media[0]
+
+  /** 上一张 / 下一张（首尾循环） */
+  const step = (delta) => onIndex((index + delta + total) % total)
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') step(-1)
+      if (e.key === 'ArrowRight') step(1)
+    }
+    window.addEventListener('keydown', onKey)
+    // 打开期间锁住页面滚动：翻页时背景不会跟着动
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  })
+
+  if (!current) return null
+
+  return (
+    <div className="media-viewer" onClick={onClose}>
+      <button className="mv-close" onClick={onClose} title="关闭">✕</button>
+
+      {total > 1 && (
+        <button className="mv-nav mv-prev" title="上一张"
+          onClick={(e) => { e.stopPropagation(); step(-1) }}>‹</button>
+      )}
+
+      <div className="mv-stage" onClick={(e) => e.stopPropagation()}>
+        {current.type === 'image'
+          ? <img src={current.src} alt="" />
+          : <video src={current.src} controls autoPlay playsInline />}
+      </div>
+
+      {total > 1 && (
+        <button className="mv-nav mv-next" title="下一张"
+          onClick={(e) => { e.stopPropagation(); step(1) }}>›</button>
+      )}
+
+      <div className="mv-bar" onClick={(e) => e.stopPropagation()}>
+        <span className="mv-counter">{index + 1} / {total}</span>
+        {!preview && (
+          <button className="btn btn-subtle btn-sm" onClick={() => onRemove(index)}>删除这一张</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
  * 单张作品卡片
  *
- * 上传入口全部收在卡片底部：点「图片 (n/10)」胶囊选图片、点「视频 (n/5)」胶囊选视频
- * （参考图里卡面中间不再有"选图片 / 选视频"按钮，卡面留给内容）；
- * 空卡的整块卡面依然是图片上传区，只保留一行提示文字。
+ * 展示逻辑对齐参考图：卡片主体由**第一张图片铺满**（object-fit: cover，四边到边），
+ * 底部是标题/介绍 + 图片/视频胶囊，胶囊下方是「点击预览」（带两张小缩略图）。
+ * 上传入口：点底部「图片 / 视频」胶囊；预览：点封面或「点击预览」。
  *
  * @param {Object} props
  * @param {Object} props.work 作品数据
@@ -57,16 +125,34 @@ function PlayIcon() {
  * @param {Function} props.onRemoveMedia (work, type, index) => void
  */
 function WorkCard({ work, preview, place, onPatch, onRemove, onImages, onVideo, onRemoveMedia }) {
-  /** 隐藏的文件选择器：卡片底部的两个胶囊与空卡卡面都触发它们 */
+  /** 隐藏的文件选择器：底部「图片 / 视频」胶囊与空卡卡面都触发它们 */
   const imgInput = useRef(null)
   const vidInput = useRef(null)
+  /** 大图浏览层：null 表示关闭，数字为当前序号 */
+  const [viewerIndex, setViewerIndex] = useState(null)
 
   /** 点卡面/「图片」胶囊：选图片（可多选） */
   const pickImages = () => imgInput.current?.click()
   /** 点「视频」胶囊：选视频（单个） */
   const pickVideo = () => vidInput.current?.click()
 
-  const hasMedia = work.images.length + work.videos.length > 0
+  /** 图片在前、视频在后，第一项即卡片封面 */
+  const media = [
+    ...work.images.map((src) => ({ type: 'image', src })),
+    ...work.videos.map((src) => ({ type: 'video', src }))
+  ]
+  const hasMedia = media.length > 0
+
+  /** 删除浏览中的这张（删完自动关闭浏览层） */
+  const removeCurrent = (index) => {
+    const item = media[index]
+    if (!item) return
+    const type = item.type === 'image' ? 'images' : 'videos'
+    const posInType = item.type === 'image' ? index : index - work.images.length
+    onRemoveMedia(work, type, posInType)
+    if (media.length <= 1) setViewerIndex(null)
+    else setViewerIndex(Math.min(index, media.length - 2))
+  }
 
   return (
     <div className={`work-card card-parent ${place ? 'is-tall' : ''}`} style={place}>
@@ -80,38 +166,22 @@ function WorkCard({ work, preview, place, onPatch, onRemove, onImages, onVideo, 
         </>
       )}
 
-      {/* 媒体区 */}
-      {!hasMedia ? (
+      {/* 封面：第一张图片（没有图片时用第一个视频）铺满卡片 */}
+      {hasMedia ? (
+        <button type="button" className="work-cover" onClick={() => setViewerIndex(0)} title="点击预览">
+          {media[0].type === 'image'
+            ? <img src={media[0].src} alt={work.title || '作品图片'} />
+            : <video src={media[0].src} muted playsInline preload="metadata" />}
+        </button>
+      ) : (
         !preview && (
           <div className="work-drop" onClick={pickImages}>
             <span className="work-drop-hint">上传图片或视频</span>
           </div>
         )
-      ) : (
-        <div className="work-media">
-          {work.images.map((src, i) => (
-            <div key={`img-${i}`} className="m-item">
-              <img src={src} alt={`${work.title} 图片${i + 1}`} />
-              {!preview && <button className="m-del" onClick={() => onRemoveMedia(work, 'images', i)}>✕</button>}
-            </div>
-          ))}
-          {work.videos.map((src, i) => (
-            <div key={`vid-${i}`} className="m-item">
-              <video src={src} controls playsInline />
-              {!preview && <button className="m-del" onClick={() => onRemoveMedia(work, 'videos', i)}>✕</button>}
-            </div>
-          ))}
-          {/* 缩略图末尾的「＋ 继续添加」：快捷追加图片，视频走下面的胶囊 */}
-          {!preview && (
-            <button type="button" className="work-upload compact" onClick={pickImages} title="继续添加图片">
-              <span className="plus">+</span>
-              <span>继续添加</span>
-            </button>
-          )}
-        </div>
       )}
 
-      {/* 文案区：左侧标题/介绍，右下角图片/视频胶囊（编辑模式下即上传入口） */}
+      {/* 文案区：左侧标题/介绍，右下角数量胶囊 + 点击预览 */}
       <div className="work-body">
         <div className="work-body-main">
           <EditableText as="h3" className="work-title" value={work.title} disabled={preview}
@@ -119,31 +189,57 @@ function WorkCard({ work, preview, place, onPatch, onRemove, onImages, onVideo, 
           <EditableText as="p" className="work-desc" value={work.desc} disabled={preview}
             onChange={(v) => onPatch(work.id, 'desc', v)} placeholder="一句简短的作品介绍" />
         </div>
-        <div className="work-meta">
-          {preview ? (
-            <>
-              <span className="work-pill"><ImageIcon />图片 ({work.images.length}/{MAX_IMAGES})</span>
-              <span className="work-pill"><PlayIcon />视频 ({work.videos.length}/{MAX_VIDEOS})</span>
-            </>
-          ) : (
-            <>
-              <button type="button" className="work-pill" onClick={pickImages} title="上传图片">
-                <ImageIcon />图片 ({work.images.length}/{MAX_IMAGES})
-              </button>
-              <button type="button" className="work-pill" onClick={pickVideo} title="上传视频">
-                <PlayIcon />视频 ({work.videos.length}/{MAX_VIDEOS})
-              </button>
-            </>
+        <div className="work-body-side">
+          <div className="work-meta">
+            {preview ? (
+              <>
+                <span className="work-pill"><ImageIcon />图片 ({work.images.length}/{MAX_IMAGES})</span>
+                <span className="work-pill"><PlayIcon />视频 ({work.videos.length}/{MAX_VIDEOS})</span>
+              </>
+            ) : (
+              <>
+                <button type="button" className="work-pill" onClick={pickImages} title="上传图片">
+                  <ImageIcon />图片 ({work.images.length}/{MAX_IMAGES})
+                </button>
+                <button type="button" className="work-pill" onClick={pickVideo} title="上传视频">
+                  <PlayIcon />视频 ({work.videos.length}/{MAX_VIDEOS})
+                </button>
+              </>
+            )}
+          </div>
+          {hasMedia && (
+            <button type="button" className="work-preview" onClick={() => setViewerIndex(0)}>
+              <span className="work-preview-thumbs">
+                {media.slice(0, 2).map((m, i) => (
+                  m.type === 'image'
+                    ? <img key={i} src={m.src} alt="" />
+                    : <video key={i} src={m.src} muted playsInline preload="metadata" />
+                ))}
+              </span>
+              点击预览
+            </button>
           )}
         </div>
       </div>
+
+      {viewerIndex !== null && hasMedia && createPortal(
+        <MediaViewer
+          media={media}
+          index={viewerIndex}
+          preview={preview}
+          onIndex={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onRemove={removeCurrent}
+        />,
+        document.body
+      )}
     </div>
   )
 }
 
 /**
  * 板块 03 · 个人作品（Bento 不对称网格）
- * 卡片对齐对标站：强调色玻璃底 + 整卡上传区 + 右下角状态胶囊；
+ * 卡片对齐对标站：强调色玻璃底 + 首图铺满卡面 + 底部标题/胶囊/预览入口；
  * 标题/副标题可编辑，每张卡片支持标题/介绍编辑、图片批量上传、视频上传
  *
  * @param {Object} props
@@ -227,7 +323,7 @@ export default function WorksSection({ works, update, meta, onMetaChange, previe
     }
   }
 
-  /** 删除指定媒体项（type: image | video, index: 序号） */
+  /** 删除指定媒体项（type: images | videos, index: 序号） */
   const removeMedia = (work, type, index) => {
     const list = [...work[type]]
     list.splice(index, 1)
