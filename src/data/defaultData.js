@@ -24,7 +24,10 @@ export function createDefaultData() {
       avatar: null,            // 头像图片 base64
       nowBadge: { text: '开放合作 / 作品交流', visible: true }, // NOW 浮动卡片
       gallery: [],             // 底部横向画廊图片数组 [{id, src}]
-      notes: []                // 便签数组 [{id, text}]
+      notes: [                 // 便签（头像浮动标签）数组 [{id, text}]
+        { id: uid(), text: '自由职业' },
+        { id: uid(), text: '可接私单' }
+      ]
     },
     /** 工作经历板块 */
     experiences: [

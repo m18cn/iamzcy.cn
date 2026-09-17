@@ -40,7 +40,7 @@ function loadSavedData() {
 /**
  * 作品集数据管理 Hook —— 编辑器核心状态
  * 负责数据初始化、localStorage 自动持久化、以及各类更新操作
- * @returns {Object} { data, updateData, updateSection, resetAll, isReady }
+ * @returns {Object} { data, updateData, updateSection, resetAll, saveNow }
  */
 export function usePortfolio() {
   // 尝试从 localStorage 恢复，否则使用默认数据
@@ -51,6 +51,13 @@ export function usePortfolio() {
 
   /** 防抖定时器引用，避免高频写入 localStorage */
   const saveTimer = useRef(null)
+  /** 最新数据引用（供立即保存使用，避免闭包拿到过期数据） */
+  const dataRef = useRef(data)
+
+  // 同步最新数据到引用
+  useEffect(() => {
+    dataRef.current = data
+  }, [data])
 
   // 数据变化时自动保存（300ms 防抖）
   useEffect(() => {
@@ -87,6 +94,21 @@ export function usePortfolio() {
   }, [])
 
   /**
+   * 立即保存当前数据到 localStorage（跳过防抖，供"保存"按钮使用）
+   * @returns {boolean} 是否保存成功
+   */
+  const saveNow = useCallback(() => {
+    clearTimeout(saveTimer.current)
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataRef.current))
+      return true
+    } catch (e) {
+      console.warn('保存失败（可能超出 localStorage 容量）', e)
+      return false
+    }
+  }, [])
+
+  /**
    * 重置为默认数据（清空本地编辑内容）
    */
   const resetAll = useCallback(() => {
@@ -94,5 +116,5 @@ export function usePortfolio() {
     setData(createDefaultData())
   }, [])
 
-  return { data, updateData, updateSection, resetAll }
+  return { data, updateData, updateSection, resetAll, saveNow }
 }

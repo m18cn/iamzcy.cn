@@ -37,8 +37,8 @@ export default function ShareModal({ url, onClose, onToast }) {
           </button>
         </div>
         <p className="share-tip">
-          链接中已包含你的全部作品内容（文字与图片），无需登录，任何人打开即可直接观看。
-          <br />若图片较多导致链接过长，建议同时使用"导出网页"发送完整文件。
+          链接已做精简压缩：未修改的内容不会写入链接，无需登录，任何人打开即可直接观看。
+          <br />若图片较多导致链接较长，建议同时使用"导出网页"发送完整文件。
         </p>
       </div>
     </div>

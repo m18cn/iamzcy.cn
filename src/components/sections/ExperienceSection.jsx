@@ -47,13 +47,14 @@ export default function ExperienceSection({ experiences, update, preview }) {
               onChange={(v) => patchExp(exp.id, 'period', v)} placeholder="开始 — 至今" />
             {/* 经历卡片 */}
             <div className="exp-card card-parent">
-              {!preview && <button className="card-del" onClick={() => removeExp(exp.id)} title="删除这段经历">✕</button>}
               <EditableText as="h3" className="exp-company" value={exp.company} disabled={preview}
                 onChange={(v) => patchExp(exp.id, 'company', v)} placeholder={EMPTY_EXP.company} />
               <EditableText as="p" className="exp-position" value={exp.position} disabled={preview}
                 onChange={(v) => patchExp(exp.id, 'position', v)} placeholder={EMPTY_EXP.position} />
               <EditableText as="p" className="exp-desc" value={exp.description} disabled={preview} multiline
                 onChange={(v) => patchExp(exp.id, 'description', v)} placeholder={EMPTY_EXP.description} />
+              {/* 底部左侧删除文字链接（编辑模式） */}
+              {!preview && <button className="exp-del" onClick={() => removeExp(exp.id)}>删除</button>}
             </div>
           </div>
         ))}
