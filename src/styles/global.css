@@ -753,6 +753,8 @@ body {
   width: min(100%, min(460px, 45vh));
 }
 
+/* 头像：鼠标移入后整体朝指针方向平移 + 轻微倾斜，照片内部做反向视差
+   （--av-x / --av-y 是组件写入的指针偏移，取值 -0.5 ~ 0.5） */
 .avatar-box {
   position: relative;
   aspect-ratio: 1 / 1;
@@ -761,7 +763,13 @@ body {
   border: 1px solid var(--border-strong);
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   cursor: pointer;
-  transition: 0.25s;
+  transform:
+    translate3d(calc(var(--av-x, 0) * 16px), calc(var(--av-y, 0) * 16px), 0)
+    perspective(900px)
+    rotateY(calc(var(--av-x, 0) * 18deg))
+    rotateX(calc(var(--av-y, 0) * -18deg));
+  transition: transform 0.4s cubic-bezier(0.22, 0.8, 0.24, 1), border-color 0.25s, box-shadow 0.25s;
+  will-change: transform;
 }
 
 .avatar-box:hover {
@@ -772,6 +780,13 @@ body {
 /* 圆角胶囊头像形状（与默认圆形通过"圆形胶囊/圆角胶囊"切换） */
 .avatar-box.shape-rounded {
   border-radius: 40px;
+}
+
+/* 头像内容（照片或占位块）比容器大一圈，向指针反方向偏移形成视差，四边不会露底 */
+.avatar-box img,
+.avatar-box .avatar-ph {
+  transform: translate3d(calc(var(--av-x, 0) * -20px), calc(var(--av-y, 0) * -20px), 0) scale(1.09);
+  transition: transform 0.4s cubic-bezier(0.22, 0.8, 0.24, 1);
 }
 
 .avatar-box img {
@@ -1673,38 +1688,48 @@ body {
 
 /* ============================================
    板块 05 · 联系我
+   对齐对标站：整块内容收窄居中（约 1380px），左文案列约 780px，
+   右侧二维码卡是固定小方块；小标与 LET'S TALK 之间留大片呼吸空间，
+   标题字号明显更大（参考图约 70px），各行间距整体放得更松
    ============================================ */
 .contact-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 52px;
+  grid-template-columns: minmax(0, 740px) auto;
+  justify-content: space-between;
+  gap: 60px;
   align-items: start;
   flex: 1;
   position: relative;
   z-index: 1;
+  width: 100%;
+  max-width: 1380px;
+  margin: 0 auto;
 }
 
+/* 小标与 LET'S TALK 之间的大留白（参考图约 126px） */
 .talk-label {
   color: var(--text);
   font-size: 13px;
   letter-spacing: 4px;
   font-weight: 700;
-  margin-bottom: 16px;
+  margin-top: 108px;
+  margin-bottom: 18px;
 }
 
+/* 大标题：参考图为两行、字高约 70px */
 .contact-headline {
-  font-size: clamp(26px, 3.6vw, 42px);
+  font-size: clamp(30px, 4.6vw, 70px);
   font-weight: 800;
-  line-height: 1.45;
-  margin-bottom: 20px;
-  letter-spacing: -0.5px;
+  line-height: 1.2;
+  margin-bottom: 44px;
+  letter-spacing: -1px;
 }
 
 .contact-desc {
   color: var(--text-dim);
-  line-height: 1.95;
-  margin-bottom: 30px;
-  max-width: 480px;
+  line-height: 1.9;
+  margin-bottom: 62px;
+  max-width: 560px;
   font-size: 15px;
 }
 
@@ -1712,7 +1737,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 32px;
+  margin-bottom: 48px;
 }
 
 .tag-chip {
@@ -1786,12 +1811,13 @@ body {
   font-weight: 600;
 }
 
-/* 二维码卡片 */
+/* 二维码卡片：固定小方块（参考图约 245×250，不再撑满整列） */
 .qr-box {
+  width: 245px;
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
   border: 1px solid var(--border);
   border-radius: 22px;
-  padding: 30px;
+  padding: 20px;
   text-align: center;
   cursor: pointer;
   transition: 0.25s;
@@ -1810,9 +1836,9 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--text-faint);
-  font-size: 13.5px;
+  font-size: 12.5px;
   overflow: hidden;
 }
 
@@ -1823,9 +1849,9 @@ body {
 }
 
 .qr-tip {
-  margin-top: 16px;
+  margin-top: 14px;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 /* ============================================

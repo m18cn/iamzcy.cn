@@ -87,6 +87,8 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
   const flashTimer = useRef(null)
   /** 便签板容器引用：新增便签后聚焦新卡 */
   const noteBoardRef = useRef(null)
+  /** 头像容器引用：鼠标移动时写入指针偏移，让头像跟随方向倾斜 */
+  const avatarRef = useRef(null)
   const [galleryBusy, setGalleryBusy] = useState(false)
   /** 刚上传/替换完成的卡片 id：短暂强调色高亮，明确反馈上传结果 */
   const [justAdded, setJustAdded] = useState([])
@@ -108,6 +110,27 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
   /** 触发头像文件选择 */
   const pickAvatar = () => {
     if (!preview) avatarInput.current?.click()
+  }
+
+  /**
+   * 鼠标在头像上移动：把指针相对圆心的偏移写进 CSS 变量（-0.5 ~ 0.5），
+   * 由样式表换算成倾斜角度与照片视差，头像就会跟着鼠标方向动
+   */
+  const onAvatarMove = (e) => {
+    const el = avatarRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    if (!r.width || !r.height) return
+    el.style.setProperty('--av-x', ((e.clientX - r.left) / r.width - 0.5).toFixed(3))
+    el.style.setProperty('--av-y', ((e.clientY - r.top) / r.height - 0.5).toFixed(3))
+  }
+
+  /** 鼠标移出头像：平滑回正 */
+  const onAvatarLeave = () => {
+    const el = avatarRef.current
+    if (!el) return
+    el.style.setProperty('--av-x', '0')
+    el.style.setProperty('--av-y', '0')
   }
 
   /** 处理头像上传：读取 → 压缩 → 更新数据 */
@@ -279,10 +302,13 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
 
         {/* 右侧头像区 */}
         <div className="avatar-wrap">
-          {/* 头像主体（圆形 / 圆角胶囊两种形状可切换） */}
+          {/* 头像主体（圆形 / 圆角胶囊两种形状可切换；鼠标移入后跟随指针方向倾斜） */}
           <div
+            ref={avatarRef}
             className={`avatar-box card-parent ${about.avatarShape === 'rounded' ? 'shape-rounded' : ''}`}
             onClick={pickAvatar}
+            onMouseMove={onAvatarMove}
+            onMouseLeave={onAvatarLeave}
           >
             {about.avatar ? (
               <img src={about.avatar} alt="头像" />
