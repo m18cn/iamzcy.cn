@@ -40,6 +40,108 @@ function PlayIcon() {
 }
 
 /**
+ * 单张作品卡片
+ *
+ * 上传入口全部收在卡片底部：点「图片 (n/10)」胶囊选图片、点「视频 (n/5)」胶囊选视频
+ * （参考图里卡面中间不再有"选图片 / 选视频"按钮，卡面留给内容）；
+ * 空卡的整块卡面依然是图片上传区，只保留一行提示文字。
+ *
+ * @param {Object} props
+ * @param {Object} props.work 作品数据
+ * @param {boolean} props.preview 是否预览模式（隐藏全部编辑入口）
+ * @param {Object} [props.place] 网格定位（跨两行的大卡）
+ * @param {Function} props.onPatch (id, field, value) => void
+ * @param {Function} props.onRemove (id) => void
+ * @param {Function} props.onImages (work, files) => void
+ * @param {Function} props.onVideo (work, file) => void
+ * @param {Function} props.onRemoveMedia (work, type, index) => void
+ */
+function WorkCard({ work, preview, place, onPatch, onRemove, onImages, onVideo, onRemoveMedia }) {
+  /** 隐藏的文件选择器：卡片底部的两个胶囊与空卡卡面都触发它们 */
+  const imgInput = useRef(null)
+  const vidInput = useRef(null)
+
+  /** 点卡面/「图片」胶囊：选图片（可多选） */
+  const pickImages = () => imgInput.current?.click()
+  /** 点「视频」胶囊：选视频（单个） */
+  const pickVideo = () => vidInput.current?.click()
+
+  const hasMedia = work.images.length + work.videos.length > 0
+
+  return (
+    <div className={`work-card card-parent ${place ? 'is-tall' : ''}`} style={place}>
+      {!preview && (
+        <>
+          <input ref={imgInput} type="file" accept="image/*" multiple hidden
+            onChange={(e) => { onImages(work, e.target.files); e.target.value = '' }} />
+          <input ref={vidInput} type="file" accept="video/*" hidden
+            onChange={(e) => { onVideo(work, e.target.files?.[0]); e.target.value = '' }} />
+          <button className="card-del" onClick={() => onRemove(work.id)} title="删除作品">✕</button>
+        </>
+      )}
+
+      {/* 媒体区 */}
+      {!hasMedia ? (
+        !preview && (
+          <div className="work-drop" onClick={pickImages}>
+            <span className="work-drop-hint">上传图片或视频</span>
+          </div>
+        )
+      ) : (
+        <div className="work-media">
+          {work.images.map((src, i) => (
+            <div key={`img-${i}`} className="m-item">
+              <img src={src} alt={`${work.title} 图片${i + 1}`} />
+              {!preview && <button className="m-del" onClick={() => onRemoveMedia(work, 'images', i)}>✕</button>}
+            </div>
+          ))}
+          {work.videos.map((src, i) => (
+            <div key={`vid-${i}`} className="m-item">
+              <video src={src} controls playsInline />
+              {!preview && <button className="m-del" onClick={() => onRemoveMedia(work, 'videos', i)}>✕</button>}
+            </div>
+          ))}
+          {/* 缩略图末尾的「＋ 继续添加」：快捷追加图片，视频走下面的胶囊 */}
+          {!preview && (
+            <button type="button" className="work-upload compact" onClick={pickImages} title="继续添加图片">
+              <span className="plus">+</span>
+              <span>继续添加</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 文案区：左侧标题/介绍，右下角图片/视频胶囊（编辑模式下即上传入口） */}
+      <div className="work-body">
+        <div className="work-body-main">
+          <EditableText as="h3" className="work-title" value={work.title} disabled={preview}
+            onChange={(v) => onPatch(work.id, 'title', v)} placeholder="作品 / 案例标题" />
+          <EditableText as="p" className="work-desc" value={work.desc} disabled={preview}
+            onChange={(v) => onPatch(work.id, 'desc', v)} placeholder="一句简短的作品介绍" />
+        </div>
+        <div className="work-meta">
+          {preview ? (
+            <>
+              <span className="work-pill"><ImageIcon />图片 ({work.images.length}/{MAX_IMAGES})</span>
+              <span className="work-pill"><PlayIcon />视频 ({work.videos.length}/{MAX_VIDEOS})</span>
+            </>
+          ) : (
+            <>
+              <button type="button" className="work-pill" onClick={pickImages} title="上传图片">
+                <ImageIcon />图片 ({work.images.length}/{MAX_IMAGES})
+              </button>
+              <button type="button" className="work-pill" onClick={pickVideo} title="上传视频">
+                <PlayIcon />视频 ({work.videos.length}/{MAX_VIDEOS})
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * 板块 03 · 个人作品（Bento 不对称网格）
  * 卡片对齐对标站：强调色玻璃底 + 整卡上传区 + 右下角状态胶囊；
  * 标题/副标题可编辑，每张卡片支持标题/介绍编辑、图片批量上传、视频上传
@@ -95,6 +197,7 @@ export default function WorksSection({ works, update, meta, onMetaChange, previe
 
   /** 批量上传作品图片 */
   const addImages = async (work, files) => {
+    if (!files || !files.length) return
     const room = MAX_IMAGES - work.images.length
     if (room <= 0) {
       onToast(`单个作品最多 ${MAX_IMAGES} 张图片`)
@@ -151,51 +254,17 @@ export default function WorksSection({ works, update, meta, onMetaChange, previe
               ? { gridColumn: cols, gridRow: '1 / span 2' }
               : undefined
           return (
-          <div key={work.id} className={`work-card card-parent ${place ? 'is-tall' : ''}`} style={place}>
-            {!preview && <button className="card-del" onClick={() => removeWork(work.id)} title="删除作品">✕</button>}
-
-            {/* 媒体区：无内容时整卡即上传区，有内容时显示缩略图列表 */}
-            {work.images.length + work.videos.length === 0 ? (
-              <WorkUploadZone preview={preview}
-                onImages={(files) => addImages(work, files)}
-                onVideo={(file) => addVideo(work, file)} />
-            ) : (
-              <div className="work-media">
-                {work.images.map((src, i) => (
-                  <div key={`img-${i}`} className="m-item">
-                    <img src={src} alt={`${work.title} 图片${i + 1}`} />
-                    {!preview && <button className="m-del" onClick={() => removeMedia(work, 'images', i)}>✕</button>}
-                  </div>
-                ))}
-                {work.videos.map((src, i) => (
-                  <div key={`vid-${i}`} className="m-item">
-                    <video src={src} controls playsInline />
-                    {!preview && <button className="m-del" onClick={() => removeMedia(work, 'videos', i)}>✕</button>}
-                  </div>
-                ))}
-                {/* 编辑模式下可继续追加 */}
-                {!preview && (
-                  <WorkUploadZone compact
-                    onImages={(files) => addImages(work, files)}
-                    onVideo={(file) => addVideo(work, file)} />
-                )}
-              </div>
-            )}
-
-            {/* 文案区：左侧标题/介绍，右下角图片/视频数量胶囊（对齐对标站） */}
-            <div className="work-body">
-              <div className="work-body-main">
-                <EditableText as="h3" className="work-title" value={work.title} disabled={preview}
-                  onChange={(v) => patchWork(work.id, 'title', v)} placeholder="作品 / 案例标题" />
-                <EditableText as="p" className="work-desc" value={work.desc} disabled={preview}
-                  onChange={(v) => patchWork(work.id, 'desc', v)} placeholder="一句简短的作品介绍" />
-              </div>
-              <div className="work-meta">
-                <span className="work-pill"><ImageIcon />图片 ({work.images.length}/{MAX_IMAGES})</span>
-                <span className="work-pill"><PlayIcon />视频 ({work.videos.length}/{MAX_VIDEOS})</span>
-              </div>
-            </div>
-          </div>
+            <WorkCard
+              key={work.id}
+              work={work}
+              preview={preview}
+              place={place}
+              onPatch={patchWork}
+              onRemove={removeWork}
+              onImages={addImages}
+              onVideo={addVideo}
+              onRemoveMedia={removeMedia}
+            />
           )
         })}
       </div>
@@ -206,57 +275,6 @@ export default function WorksSection({ works, update, meta, onMetaChange, previe
           <span className="exp-count">已添加 {works.length} 个板块</span>
         </div>
       )}
-    </div>
-  )
-}
-
-/**
- * 作品上传占位区（支持图片批量 + 单视频）
- * @param {Object} props
- * @param {boolean} [props.compact] 紧凑模式（已有媒体时继续追加）
- * @param {boolean} [props.preview] 预览模式下不渲染
- * @param {Function} props.onImages 图片文件回调
- * @param {Function} props.onVideo 视频文件回调
- */
-function WorkUploadZone({ compact = false, preview = false, onImages, onVideo }) {
-  const imgInput = useRef(null)
-  const vidInput = useRef(null)
-  if (preview) return null
-
-  /* 紧凑模式：已有媒体时在缩略图末尾追加一个小方块 */
-  if (compact) {
-    return (
-      <div className="work-upload compact" onClick={(e) => e.stopPropagation()}>
-        <span className="plus">+</span>
-        <span>继续添加</span>
-        <div className="work-upload-actions" onClick={(e) => e.stopPropagation()}>
-          <button type="button" className="btn btn-subtle btn-xs"
-            onClick={() => imgInput.current?.click()}>选图片</button>
-          <button type="button" className="btn btn-subtle btn-xs"
-            onClick={() => vidInput.current?.click()}>选视频</button>
-        </div>
-        <input ref={imgInput} type="file" accept="image/*" multiple hidden
-          onChange={(e) => { onImages(e.target.files); e.target.value = '' }} />
-        <input ref={vidInput} type="file" accept="video/*" hidden
-          onChange={(e) => { onVideo(e.target.files?.[0]); e.target.value = '' }} />
-      </div>
-    )
-  }
-
-  /* 空卡：整张卡片就是上传区，提示文字居中，点卡片即选图片（对齐对标站） */
-  return (
-    <div className="work-drop" onClick={() => imgInput.current?.click()}>
-      <span className="work-drop-hint">上传图片或视频</span>
-      <div className="work-drop-actions" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="btn btn-subtle btn-xs"
-          onClick={() => imgInput.current?.click()}>选图片</button>
-        <button type="button" className="btn btn-subtle btn-xs"
-          onClick={() => vidInput.current?.click()}>选视频</button>
-      </div>
-      <input ref={imgInput} type="file" accept="image/*" multiple hidden
-        onChange={(e) => { onImages(e.target.files); e.target.value = '' }} />
-      <input ref={vidInput} type="file" accept="video/*" hidden
-        onChange={(e) => { onVideo(e.target.files?.[0]); e.target.value = '' }} />
     </div>
   )
 }

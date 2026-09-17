@@ -1390,24 +1390,14 @@ body {
   color: rgba(245, 248, 246, 0.75);
 }
 
-/* 选择按钮常态微透明，悬停卡面才完全显现（保持卡面干净） */
-.work-drop-actions {
-  display: flex;
-  gap: 10px;
-  opacity: 0.6;
-  transition: opacity 0.22s;
-}
+/* 选择按钮已移到卡片底部的「图片 / 视频」胶囊，卡面中间只留提示文字 */
 
-.work-drop:hover .work-drop-actions,
-.work-drop:focus-within .work-drop-actions {
-  opacity: 1;
-}
-
-/* 缩略图末尾的"继续添加"小块 */
+/* 缩略图末尾的"继续添加"小块（点它追加图片，视频走底部胶囊） */
 .work-upload.compact {
   flex: 0 0 auto;
   width: 150px;
   min-height: 150px;
+  padding: 0;
   border-radius: 12px;
   border: 1.5px dashed var(--border-strong);
   display: flex;
@@ -1417,7 +1407,8 @@ body {
   gap: 8px;
   color: var(--text-faint);
   font-size: 13px;
-  cursor: default;
+  font-family: var(--font);
+  cursor: pointer;
   background: rgba(0, 0, 0, 0.14);
   transition: 0.2s;
 }
@@ -1430,19 +1421,6 @@ body {
 .work-upload.compact .plus {
   font-size: 22px;
   font-weight: 300;
-}
-
-.work-upload-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-/* 小号胶囊按钮（卡内"选图片/选视频"） */
-.btn-xs {
-  min-height: 30px;
-  padding: 0 14px;
-  font-size: 12px;
 }
 
 /* 已上传媒体预览（横向缩略图条） */
@@ -1537,7 +1515,8 @@ body {
   flex-shrink: 0;
 }
 
-/* 数量胶囊：细描边小药丸 + 图标 */
+/* 数量胶囊：细描边小药丸 + 图标
+   编辑模式下它是按钮（点「图片」选图片、点「视频」选视频），预览模式是纯展示 */
 .work-pill {
   display: inline-flex;
   align-items: center;
@@ -1548,6 +1527,19 @@ body {
   color: rgba(245, 248, 246, 0.8);
   font-size: 11.5px;
   white-space: nowrap;
+}
+
+button.work-pill {
+  background: transparent;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+button.work-pill:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #071017;
 }
 
 .work-pill svg {
@@ -2359,28 +2351,92 @@ body.preview-mode .adv-card:hover .editable:focus {
     padding: clamp(76px, 9vh, 88px) 0 clamp(54px, 6.4vh, 68px);
   }
 
+  /* 首页：手机上同样"文案在左、头像在右"，整体等比缩小（与电脑端的版式关系一致） */
   .hero {
-    gap: clamp(12px, 1.8vh, 20px);
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: clamp(10px, 2.6vw, 16px);
+    align-items: center;
     padding-top: 0;
-    justify-items: stretch;
   }
 
-  /* 头像：居中，尺寸同时受宽度与视口高度约束 */
+  /* 文案列变窄，字号与按钮收一档，避免"我是XXX / PORTFOLIO"折行 */
+  .m3-hero-title {
+    font-size: clamp(30px, 9.5vw, 42px);
+  }
+  .hero-cta {
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .hero-cta .btn {
+    min-height: 38px;
+    padding: 0 16px;
+    font-size: 13px;
+  }
+
+  /* 便签：窄列里 4 列太挤，改 2 列 */
+  .note-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .note-card,
+  .note-add {
+    min-height: 42px;
+    font-size: 12px;
+  }
+  .note-card {
+    padding: 9px 22px 8px 11px;
+  }
+  .note-card .editable {
+    font-size: 12px;
+  }
+
+  /* 头像：右侧一栏，宽高同时约束 */
   .avatar-wrap {
-    justify-self: center;
-    width: min(66%, 26vh, 220px);
+    justify-self: end;
+    width: min(36vw, 26vh, 180px);
   }
 
-  /* 头像上的操作胶囊 / 形状切换 / NOW 卡片跟着新尺寸微调 */
+  /* 头像上的操作胶囊 / 形状切换 / NOW 卡片跟着新尺寸收小，
+     避免小头像被这几块盖住 */
   .avatar-ops {
-    top: -10px;
+    top: -6px;
+    gap: 4px;
   }
-  .now-card {
-    right: -6px;
-    bottom: 18px;
+  .av-op {
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+  .avatar-ph {
+    padding: 0 8px;
+    font-size: 11px;
   }
   .shape-toggle {
-    bottom: -12px;
+    bottom: -13px;
+    gap: 2px;
+    padding: 3px;
+  }
+  .st-btn {
+    min-height: 22px;
+    padding: 0 7px;
+    font-size: 9.5px;
+  }
+  .now-card {
+    right: 0;
+    bottom: 6px;
+    padding: 7px 9px;
+    font-size: 10px;
+    max-width: 132px;
+  }
+  .now-card .now-label {
+    letter-spacing: 1.6px;
+    font-size: 9.5px;
+    margin-bottom: 3px;
+  }
+  .now-card .now-close {
+    top: 4px;
+    right: 6px;
+    font-size: 11px;
   }
 
   /* 画廊：卡片收小、上留白压缩，整块不再钻到浮动操作栏下面 */
