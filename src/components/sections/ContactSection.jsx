@@ -83,7 +83,8 @@ export default function ContactSection({ contact, update, preview, onToast }) {
                 {!preview && <button className="t-del" onClick={() => removeTag(i)}>✕</button>}
               </span>
             ))}
-            {!preview && <button className="tag-add" onClick={addTag}>+ 添加标签</button>}
+            {/* 预览/分享模式下由 CSS 隐藏，但保留高度以保持两种模式版式一致 */}
+            <button className="tag-add" onClick={addTag}>+ 添加标签</button>
           </div>
 
           {/* 电话 */}

@@ -413,15 +413,15 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
             )
           })}
         </div>
-        {!preview && (
-          <div className="gallery-ctrl">
-            <button className="btn btn-primary btn-sm" onClick={pickGallery} disabled={galleryBusy}>
-              {galleryBusy ? '处理中…' : '+ 增加图片'}
-            </button>
-            <button className="link-btn" onClick={clearGallery} disabled={galleryBusy}>清空图片</button>
-            <span className="gallery-count">{about.gallery.length}/{GALLERY_MAX}</span>
-          </div>
-        )}
+        {/* 画廊控制条：预览/分享模式下由 CSS 隐藏，但保留同样的高度，
+            这样编辑页与预览页每屏的版式位置完全一致 */}
+        <div className="gallery-ctrl">
+          <button className="btn btn-primary btn-sm" onClick={pickGallery} disabled={galleryBusy}>
+            {galleryBusy ? '处理中…' : '+ 增加图片'}
+          </button>
+          <button className="link-btn" onClick={clearGallery} disabled={galleryBusy}>清空图片</button>
+          <span className="gallery-count">{about.gallery.length}/{GALLERY_MAX}</span>
+        </div>
       </div>
 
       {/* 隐藏的文件选择器 */}

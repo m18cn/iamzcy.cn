@@ -149,13 +149,13 @@ export default function AdvantagesSection({ advantages, update, meta, onMetaChan
         ))}
       </div>
 
-      {!preview && (
-        <div className="adv-footer">
-          <button className="btn btn-subtle" onClick={addAdv}>+ 添加优势</button>
-          <button className="btn btn-primary" onClick={() => onGoSection('about')}>返回首页 ↗</button>
-          <button className="btn btn-ghost" onClick={() => onGoSection('contact')}>联系我</button>
-        </div>
-      )}
+      {/* 底部操作区：预览/分享模式下按钮由 CSS 隐藏（但保留高度），
+          保证编辑页与预览页每屏版式位置一致 */}
+      <div className="adv-footer">
+        <button className="btn btn-subtle" onClick={addAdv}>+ 添加优势</button>
+        <button className="btn btn-primary" onClick={() => onGoSection('about')}>返回首页 ↗</button>
+        <button className="btn btn-ghost" onClick={() => onGoSection('contact')}>联系我</button>
+      </div>
     </div>
   )
 }

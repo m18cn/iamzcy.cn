@@ -62,13 +62,12 @@ export default function ExperienceSection({ experiences, update, meta, onMetaCha
         ))}
       </div>
 
-      {/* 底部操作区（仅编辑模式） */}
-      {!preview && (
-        <div className="exp-footer">
-          <button className="btn btn-subtle" onClick={addExp}>+ 添加经历</button>
-          <span className="exp-count">已添加 {experiences.length} 段经历</span>
-        </div>
-      )}
+      {/* 底部操作区：预览/分享模式下由 CSS 隐藏，但保留同样的高度，
+          保证编辑页与预览页每屏版式位置一致 */}
+      <div className="exp-footer">
+        <button className="btn btn-subtle" onClick={addExp}>+ 添加经历</button>
+        <span className="exp-count">已添加 {experiences.length} 段经历</span>
+      </div>
     </div>
   )
 }

@@ -365,12 +365,12 @@ export default function WorksSection({ works, update, meta, onMetaChange, previe
         })}
       </div>
 
-      {!preview && (
-        <div className="works-footer">
-          <button className="btn btn-subtle" onClick={addWork}>+ 添加作品板块</button>
-          <span className="exp-count">已添加 {works.length} 个板块</span>
-        </div>
-      )}
+      {/* 底部操作区：预览/分享模式下由 CSS 隐藏，但保留同样的高度，
+          保证编辑页与预览页每屏版式位置一致 */}
+      <div className="works-footer">
+        <button className="btn btn-subtle" onClick={addWork}>+ 添加作品板块</button>
+        <span className="exp-count">已添加 {works.length} 个板块</span>
+      </div>
     </div>
   )
 }

@@ -1423,14 +1423,15 @@ body {
   font-weight: 300;
 }
 
-/* 封面：第一张图片铺满整张卡片（object-fit: cover，四边到边）
-   图片用绝对定位脱离文档流：无论原图是宽幅还是竖长，它都不再参与卡片的
-   高度计算 —— 卡片尺寸只由网格决定，换图不会把卡片撑变形 */
+/* 封面：第一张图片铺满**整张卡片**（连标题栏那一块也铺满，图片透出来）
+   图片绝对定位铺满并脱离文档流：无论原图是宽幅还是竖长，都不参与卡片高度
+   计算 —— 卡片尺寸只由网格决定，换图不会把卡片撑变形 */
 .work-cover {
-  position: relative;
-  flex: 1 1 0;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   width: 100%;
+  height: 100%;
   padding: 0;
   border: none;
   background: #0a1218;
@@ -1553,14 +1554,28 @@ body {
 
 /* 缩略图末尾旧样式已由上面的 .work-strip / .work-thumb 取代 */
 
-/* 文案区：标题/介绍在左，数量胶囊贴在右下角（对齐对标站） */
+/* 文案区：标题/介绍在左，数量胶囊贴在右下角（对齐对标站）
+   有封面时它浮在图片之上（图片铺满整张卡），底部加一层渐变保证文字可读 */
 .work-body {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
   padding: 16px 18px 18px;
+}
+
+/* 有封面时：底部渐变遮罩（没有封面 / 空卡时保持原来的玻璃底） */
+.work-card:has(.work-cover) .work-body {
+  background: linear-gradient(
+    to top,
+    rgba(5, 9, 13, 0.9) 0%,
+    rgba(5, 9, 13, 0.66) 52%,
+    rgba(5, 9, 13, 0) 100%
+  );
 }
 
 /* 右下角：胶囊一行 + 「点击预览」一行 */
@@ -2298,21 +2313,32 @@ button.work-pill:hover {
 /* ============================================
    预览模式（隐藏编辑控件，纯净展示）
    ============================================ */
+/* 绝对定位的编辑按钮（不影响排版）：预览下直接移除 */
 body.preview-mode .card-del,
-body.preview-mode .g-add,
-body.preview-mode .g-ghost,
+body.preview-mode .avatar-ops,
+body.preview-mode .now-card .now-close,
+body.preview-mode .avatar-tag .n-del,
+body.preview-mode .g-remove,
+body.preview-mode .note-del {
+  display: none !important;
+  box-shadow: none;
+}
+
+/* 参与纵向排版的编辑控件：预览下用 visibility 隐藏而不是 display:none。
+   用 display:none 会让预览页少掉这几行的高度，而每屏内容又是垂直居中的，
+   于是整块内容会往下位移 —— 编辑页和预览页看起来就是"版式不一样"。 */
 body.preview-mode .gallery-ctrl,
-body.preview-mode .exp-del,
-body.preview-mode .exp-footer,
 body.preview-mode .works-footer,
-body.preview-mode .works-upload-hint,
+body.preview-mode .exp-footer,
 body.preview-mode .adv-footer .btn,
 body.preview-mode .tag-add,
-body.preview-mode .tag-chip .t-del,
-body.preview-mode .now-card .now-close,
-body.preview-mode .avatar-ops,
-body.preview-mode .avatar-tag .n-del {
-  display: none !important;
+body.preview-mode .exp-del,
+body.preview-mode .works-upload-hint,
+body.preview-mode .g-add,
+body.preview-mode .g-ghost,
+body.preview-mode .tag-chip .t-del {
+  visibility: hidden !important;
+  pointer-events: none !important;
   box-shadow: none;
 }
 
