@@ -2347,6 +2347,69 @@ body.preview-mode .adv-card:hover .editable:focus {
   }
 }
 
+/* ============================================
+   手机竖屏 · 首页单屏适配（≤760px）
+   ------------------------------------------------------------
+   首页在手机上原本是"文案 → 头像 → 画廊"依次排下来，三块加起来比一屏还高：
+   头像被挤到屏幕外、画廊被右下角浮动操作栏压住，看起来就是"头像错位"。
+   这里把三块按比例收小并让头像居中，保证整页刚好一屏装得下。
+   ============================================ */
+@media (max-width: 760px) {
+  .page-sec {
+    padding: clamp(76px, 9vh, 88px) 0 clamp(54px, 6.4vh, 68px);
+  }
+
+  .hero {
+    gap: clamp(12px, 1.8vh, 20px);
+    padding-top: 0;
+    justify-items: stretch;
+  }
+
+  /* 头像：居中，尺寸同时受宽度与视口高度约束 */
+  .avatar-wrap {
+    justify-self: center;
+    width: min(66%, 26vh, 220px);
+  }
+
+  /* 头像上的操作胶囊 / 形状切换 / NOW 卡片跟着新尺寸微调 */
+  .avatar-ops {
+    top: -10px;
+  }
+  .now-card {
+    right: -6px;
+    bottom: 18px;
+  }
+  .shape-toggle {
+    bottom: -12px;
+  }
+
+  /* 画廊：卡片收小、上留白压缩，整块不再钻到浮动操作栏下面 */
+  .gallery-stage {
+    margin-top: clamp(6px, 1.6vh, 14px);
+  }
+  .gallery-dock {
+    min-height: 0;
+    padding: clamp(22px, 4vh, 40px) 12px 10px;
+  }
+  .dock-item {
+    width: clamp(84px, 11vh, 108px);
+    height: clamp(110px, 14.5vh, 140px);
+  }
+
+  /* 导航胶囊：窄屏收紧每项内边距与左右留白，
+     5 个板块在 360px 宽的手机上也能一次显示完（不用横向滚动） */
+  .nav-wrap {
+    padding: 0 8px;
+  }
+  .nav-pill {
+    gap: 2px;
+  }
+  .nav-item {
+    padding: 8px 9px;
+    font-size: 12.5px;
+  }
+}
+
 /* 减少动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   *,
