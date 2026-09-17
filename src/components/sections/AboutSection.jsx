@@ -5,17 +5,69 @@ import { processImageFiles, readFileAsDataURL, compressImage } from '../../utils
 /** 画廊图片数量上限（与原站一致） */
 const GALLERY_MAX = 16
 
-/** 空画廊时展示的幽灵占位卡片数量 */
-const GHOST_COUNT = 6
+/** 画廊 dock 基础卡位数：7 张卡形成两端上翘的弧形（与原站一致） */
+const DOCK_SLOTS = 7
 
-/** 便签（浮动标签）定位样式类总数，按顺序循环使用 */
-const TAG_POS_COUNT = 6
+/** 每个卡位的旋转角（度）：-5 → +5 递增，首尾对称 */
+const DOCK_ROTATES = [-5, -3.33, -1.67, 0, 1.67, 3.33, 5]
+
+/** 每个卡位的抬升量（px）：两端高中间低，形成弧形卡片带 */
+const DOCK_LIFTS = [16, 6, -3, -8, -3, 6, 16]
+
+/**
+ * 拆字动画文本组件（复刻原站 model3-split-char）
+ * 视觉层：逐字 span 播放 m3-split-char-in 弹入动画，--m3-split-delay 逐字递增
+ * 编辑层：透明 contentEditable 覆盖在视觉层之上（仅编辑模式），光标为强调色；
+ * 输入时通过 live 状态实时重拆视觉层，打字即见（失焦才正式提交到全局数据）
+ *
+ * @param {Object} props
+ * @param {string} props.value 当前文本
+ * @param {Function} props.onChange 提交回调
+ * @param {boolean} props.disabled 是否禁用编辑（预览模式只显示拆字动画）
+ * @param {string} [props.className] 附加类名（控制字体大小与颜色）
+ * @param {number} [props.step] 每字动画延迟递增量（ms）
+ * @param {string} [props.placeholder] 空值占位提示
+ */
+function SplitText({ value, onChange, disabled, className = '', step = 92, placeholder = '' }) {
+  /** 输入中的实时文本（null 表示未在编辑，回落到全局 value） */
+  const [live, setLive] = useState(null)
+  /** 实际渲染文本：编辑中用 live，平时用全局 value */
+  const shown = live ?? value ?? ''
+  const chars = Array.from(shown)
+
+  return (
+    <span className={`m3-edit-wrap ${className}`.trim()}>
+      {/* 视觉层：拆字动画（预览与编辑共用，输入时实时重拆） */}
+      <span className="m3-split-text" aria-label={shown}>
+        {chars.length
+          ? chars.map((c, i) => (
+              <span
+                key={`${i}-${c}`}
+                className="m3-split-char"
+                aria-hidden="true"
+                style={{ '--m3-split-delay': `${i * step}ms` }}
+              >
+                {c}
+              </span>
+            ))
+          : <span className="m3-split-ph">{placeholder}</span>}
+      </span>
+      {/* 编辑层：透明文字的可编辑覆盖层，直接在拆字效果上打字 */}
+      {!disabled && (
+        <EditableText as="span" className="m3-edit-overlay" value={value}
+          onChange={(v) => { setLive(null); onChange(v) }}
+          onInput={(t) => setLive(t?.replace(/\u00a0/g, ' '))}
+          placeholder="" />
+      )}
+    </span>
+  )
+}
 
 /**
  * 板块 01 · 关于我（Hero）
- * 左侧：问候语 + 大标题 + 简介 + 分隔线 + CTA + 添加便签入口
- * 右侧：圆形头像（更换/删除封面）+ 浮动便签标签 + NOW 状态卡
- * 底部：横向画廊卡片（悬停上浮位移动效）
+ * 左侧：问候语 + 大标题（名字/英文标拆字动画）+ 职业 + 简介 + 双胶囊 CTA + 便签板
+ * 右侧：圆形头像（更换/删除封面）+ NOW 状态卡
+ * 底部：画廊 dock（两端上翘的弧形卡片带，悬停上浮回正）
  *
  * @param {Object} props
  * @param {Object} props.about about 板块数据
@@ -90,7 +142,7 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
     }
   }
 
-  /** 添加一条便签（浮动标签） */
+  /** 添加一条便签（左侧便签板） */
   const addNote = () => {
     const text = window.prompt('输入便签内容')
     if (text?.trim()) {
@@ -103,36 +155,56 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
     update((a) => ({ notes: a.notes.filter((n) => n.id !== id) }))
   }
 
+  /** 编辑模式下的空卡位数量：不足 7 张补齐到 7 张；已满 7 张则在尾部追加 1 张（未达上限时） */
+  const emptySlots = preview ? 0 : (
+    about.gallery.length >= DOCK_SLOTS
+      ? (about.gallery.length < GALLERY_MAX ? 1 : 0)
+      : DOCK_SLOTS - about.gallery.length
+  )
+
   return (
     <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
       <div className="watermark">PORTFOLIO</div>
 
       <div className="hero">
-        {/* 左侧文案区 */}
-        <div>
-          <EditableText as="p" className="hero-hello" value={about.hello} disabled={preview}
-            onChange={(v) => update({ hello: v })} placeholder="HELLO / 你好" />
-          <EditableText as="h1" className="hero-name" value={about.name} disabled={preview}
-            onChange={(v) => update({ name: v })} placeholder="我是XXX" />
-          <EditableText as="p" className="hero-subtitle" value={about.subtitle} disabled={preview}
-            onChange={(v) => update({ subtitle: v })} placeholder="PORTFOLIO" />
-          <EditableText as="p" className="hero-title" value={about.title} disabled={preview}
-            onChange={(v) => update({ title: v })} placeholder="职业名称" />
-          <EditableText as="p" className="hero-bio" value={about.bio} disabled={preview} multiline
-            onChange={(v) => update({ bio: v })} placeholder="写一句关于你的简介" />
+        {/* 左侧文案区：m3-rise 进场 + 逐字拆字动画 + 便签板 */}
+        <div className="m3-left-cluster">
+          <div className="m3-hero-copy">
+            <EditableText as="p" className="hero-hello" value={about.hello} disabled={preview}
+              onChange={(v) => update({ hello: v })} placeholder="HELLO / 你好" />
+            {/* 大标题：中文名（强调色 0.8em）+ 英文标（白色 0.42em）两行拆字动画 */}
+            <h1 className="m3-hero-title">
+              <SplitText className="m3-hero-name" value={about.name} disabled={preview} step={92}
+                onChange={(v) => update({ name: v })} placeholder="我是XXX" />
+              <SplitText className="m3-hero-wordmark" value={about.subtitle} disabled={preview} step={76}
+                onChange={(v) => update({ subtitle: v })} placeholder="PORTFOLIO" />
+            </h1>
+            <EditableText as="p" className="m3-hero-role" value={about.title} disabled={preview}
+              onChange={(v) => update({ title: v })} placeholder="职业名称" />
+            <EditableText as="p" className="hero-bio" value={about.bio} disabled={preview} multiline
+              onChange={(v) => update({ bio: v })} placeholder="写一句关于你的简介，让别人快速了解你。" />
 
-          {/* 简介下的强调色细分隔线 */}
-          <div className="hero-divider" />
-
-          <div className="hero-cta">
-            <button className="btn btn-primary" onClick={() => onGoSection('works')}>查看我的作品 ↗</button>
-            <button className="btn btn-ghost" onClick={() => onGoSection('contact')}>联系我</button>
+            <div className="hero-cta">
+              <button className="btn btn-primary" onClick={() => onGoSection('works')}>查看我的作品 ↗</button>
+              <button className="btn btn-ghost" onClick={() => onGoSection('contact')}>联系我</button>
+            </div>
           </div>
 
-          {/* 添加便签入口（编辑模式） */}
-          {!preview && (
-            <div className="notes-row">
-              <button className="btn btn-subtle" onClick={addNote}>+ 添加便签</button>
+          {/* 便签板：彩色便签卡网格（预览模式下无便签则整板隐藏） */}
+          {(about.notes.length > 0 || !preview) && (
+            <div className="note-board" aria-label="关于我的便签">
+              {about.notes.map((n, i) => (
+                <div key={n.id} className={`note-card note-var-${i % 3}`}
+                  style={{ animationDelay: `${(0.34 + i * 0.08).toFixed(2)}s` }}>
+                  <EditableText value={n.text} disabled={preview}
+                    onChange={(v) => update((a) => ({
+                      notes: a.notes.map((x) => (x.id === n.id ? { ...x, text: v } : x))
+                    }))}
+                    placeholder="便签内容" />
+                  {!preview && <button className="note-del" aria-label="删除便签" onClick={() => removeNote(n.id)}>×</button>}
+                </div>
+              ))}
+              {!preview && <button className="note-add" onClick={addNote}>＋ 添加便签</button>}
             </div>
           )}
         </div>
@@ -148,8 +220,7 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
               <img src={about.avatar} alt="头像" />
             ) : (
               <div className="avatar-ph">
-                <span className="plus-ring">+</span>
-                <span>上传头像</span>
+                <span>点击替换头像</span>
               </div>
             )}
             {!preview && <div className="avatar-tip">点击替换头像</div>}
@@ -181,15 +252,6 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
             </div>
           )}
 
-          {/* 头像浮动便签标签（围绕圆形头像漂浮） */}
-          {about.notes.map((n, i) => (
-            <span key={n.id} className={`avatar-tag tag-pos-${i % TAG_POS_COUNT}`}
-              style={{ animationDelay: `${(i % 5) * 0.55}s` }}>
-              {n.text}
-              {!preview && <button className="n-del" onClick={() => removeNote(n.id)}>✕</button>}
-            </span>
-          ))}
-
           {/* NOW 状态浮动卡片 */}
           {about.nowBadge?.visible && (
             <div className="now-card">
@@ -211,27 +273,46 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
         </div>
       </div>
 
-      {/* 底部横向画廊 */}
-      <div className="gallery-area">
-        <div className="gallery-row">
-          {about.gallery.map((g) => (
-            <div key={g.id} className="g-card card-parent">
+      {/* 底部画廊 dock：两端上翘的弧形卡片带（rotate/lift 内联变量驱动） */}
+      <div className="gallery-stage">
+        <div className="gallery-dock">
+          {/* 已上传图片卡 */}
+          {about.gallery.map((g, i) => (
+            <div
+              key={g.id}
+              className="dock-item card-parent"
+              style={{
+                '--m3-gallery-rotate': `${DOCK_ROTATES[i % DOCK_SLOTS]}deg`,
+                '--m3-gallery-lift': `${DOCK_LIFTS[i % DOCK_SLOTS]}px`,
+                animationDelay: `${(0.08 + i * 0.04).toFixed(2)}s`
+              }}
+            >
               <img src={g.src} alt="画廊图片" />
-              {!preview && <button className="card-del" onClick={() => removeGalleryItem(g.id)}>✕</button>}
+              {!preview && (
+                <button className="g-remove" aria-label="删除图片" onClick={() => removeGalleryItem(g.id)}>×</button>
+              )}
             </div>
           ))}
-          {/* 空画廊幽灵占位卡片（编辑模式） */}
-          {!preview && about.gallery.length === 0 && Array.from({ length: GHOST_COUNT }).map((_, i) => (
-            <button key={`ghost-${i}`} className="g-ghost" onClick={pickGallery} disabled={galleryBusy} title="点击上传图片">
-              <span>+</span>
-            </button>
-          ))}
-          {/* 尾部添加卡片（编辑模式，未达上限时显示） */}
-          {!preview && about.gallery.length > 0 && about.gallery.length < GALLERY_MAX && (
-            <button className="g-add" onClick={pickGallery} disabled={galleryBusy}>
-              {galleryBusy ? '…' : '+'}
-            </button>
-          )}
+          {/* 空卡位："＋"上传卡（编辑模式补齐到 7 张或尾部追加） */}
+          {Array.from({ length: emptySlots }).map((_, k) => {
+            const i = about.gallery.length + k
+            return (
+              <button
+                key={`dock-empty-${i}`}
+                className="dock-item dock-item-empty"
+                style={{
+                  '--m3-gallery-rotate': `${DOCK_ROTATES[i % DOCK_SLOTS]}deg`,
+                  '--m3-gallery-lift': `${DOCK_LIFTS[i % DOCK_SLOTS]}px`,
+                  animationDelay: `${(0.08 + i * 0.04).toFixed(2)}s`
+                }}
+                onClick={pickGallery}
+                disabled={galleryBusy}
+                title="点击上传图片"
+              >
+                <span className="dock-empty">{galleryBusy ? '…' : '＋'}</span>
+              </button>
+            )
+          })}
         </div>
         {!preview && (
           <div className="gallery-ctrl">
@@ -244,7 +325,7 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
 
       {/* 隐藏的文件选择器 */}
       <input ref={avatarInput} type="file" accept="image/*" hidden onChange={onAvatarFile} />
-      <input ref={galleryInput} type="file" accept="image/*" multiple hidden onChange={onGalleryFiles} />
+      <input ref={galleryInput} type="file" accept="image/*,.heic,.heif" multiple hidden onChange={onGalleryFiles} />
     </div>
   )
 }

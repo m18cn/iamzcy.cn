@@ -8,13 +8,14 @@ import { useEffect, useRef } from 'react'
  * @param {Object} props
  * @param {string} props.value 当前文本值
  * @param {Function} props.onChange 提交回调 (nextValue: string) => void
+ * @param {Function} [props.onInput] 输入中实时回调（不提交，用于实时同步视觉层）
  * @param {string} [props.className] 附加类名
  * @param {string} [props.as] 渲染的标签名，默认 'div'
  * @param {string} [props.placeholder] 内容为空时的占位提示
  * @param {boolean} [props.disabled] 是否禁用编辑（预览模式）
  * @param {boolean} [props.multiline] 是否允许换行（Enter 提交或 Shift+Enter 换行）
  */
-export default function EditableText({ value, onChange, className = '', as: Tag = 'div', placeholder = '点击输入', disabled = false, multiline = false }) {
+export default function EditableText({ value, onChange, onInput, className = '', as: Tag = 'div', placeholder = '点击输入', disabled = false, multiline = false }) {
   const ref = useRef(null)
 
   // 外部值变化时同步到 DOM（跳过正在编辑导致的相同内容）
@@ -23,6 +24,11 @@ export default function EditableText({ value, onChange, className = '', as: Tag 
       ref.current.innerText = value ?? ''
     }
   }, [value])
+
+  /** 输入中实时上报文本（仅用于视觉同步，不触发提交） */
+  const handleInput = () => {
+    onInput?.(ref.current?.innerText ?? '')
+  }
 
   /** 失焦时提交内容 */
   const commit = () => {
@@ -50,6 +56,7 @@ export default function EditableText({ value, onChange, className = '', as: Tag 
       suppressContentEditableWarning
       data-placeholder={placeholder}
       onBlur={commit}
+      onInput={handleInput}
       onKeyDown={onKeyDown}
       spellCheck={false}
     />
