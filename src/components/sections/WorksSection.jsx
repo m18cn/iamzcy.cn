@@ -88,8 +88,8 @@ function MediaViewer({ media, index, preview, onIndex, onClose, onRemove }) {
 
       <div className="mv-stage" onClick={(e) => e.stopPropagation()}>
         {current.type === 'image'
-          ? <img src={current.src} alt="" />
-          : <video src={current.src} controls autoPlay playsInline />}
+          ? <img src={current.src} alt="" decoding="async" />
+          : <video src={current.src} controls autoPlay playsInline preload="metadata" />}
       </div>
 
       {total > 1 && (
@@ -170,8 +170,8 @@ function WorkCard({ work, preview, place, onPatch, onRemove, onImages, onVideo, 
       {hasMedia ? (
         <button type="button" className="work-cover" onClick={() => setViewerIndex(0)} title="点击预览">
           {media[0].type === 'image'
-            ? <img src={media[0].src} alt={work.title || '作品图片'} />
-            : <video src={media[0].src} muted playsInline preload="metadata" />}
+            ? <img src={media[0].src} alt={work.title || '作品图片'} loading="lazy" decoding="async" />
+            : <video src={media[0].src} muted playsInline preload="none" />}
         </button>
       ) : (
         !preview && (
@@ -212,8 +212,8 @@ function WorkCard({ work, preview, place, onPatch, onRemove, onImages, onVideo, 
               <span className="work-preview-thumbs">
                 {media.slice(0, 2).map((m, i) => (
                   m.type === 'image'
-                    ? <img key={i} src={m.src} alt="" />
-                    : <video key={i} src={m.src} muted playsInline preload="metadata" />
+                    ? <img key={i} src={m.src} alt="" loading="lazy" decoding="async" />
+                    : <video key={i} src={m.src} muted playsInline preload="none" />
                 ))}
               </span>
               点击预览

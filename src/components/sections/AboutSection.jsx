@@ -385,7 +385,7 @@ export default function AboutSection({ about, update, preview, onToast, onGoSect
             >
               {/* 图片下方的"＋"占位：图片解码中或加载失败时可见（与原站一致） */}
               <span className="dock-empty" aria-hidden="true">+</span>
-              <img src={g.src} alt="画廊图片" />
+              <img src={g.src} alt="画廊图片" loading="lazy" decoding="async" />
               {!preview && (
                 <button className="g-remove" aria-label="删除图片"
                   onClick={(e) => { e.stopPropagation(); removeGalleryItem(g.id) }}>✕</button>

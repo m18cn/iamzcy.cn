@@ -340,7 +340,9 @@ function apiHint(status) {
   return {
     401: 'Token 无效或已过期，请重新生成',
     403: 'Token 权限不足：在 Repository permissions 里把 Contents 设为 Read and write',
-    404: '找不到仓库或无权限：Token 的 Repository access 要勾上该仓库（选 Public repositories 只有只读权限，发布不了）'
+    404: '找不到仓库或无权限：Token 的 Repository access 要勾上该仓库（选 Public repositories 只有只读权限，发布不了）',
+    409: '仓库刚被另一次发布改动过，请再点一次「更新内容」',
+    422: '仓库刚被另一次发布改动过，请再点一次「更新内容」'
   }[status]
 }
 
@@ -452,66 +454,276 @@ async function resolveReadRepo() {
   return siteRepoCache
 }
 
+/* ============================================================
+   内容与图片分开存放（v3）
+   ------------------------------------------------------------
+   v2 把图片 base64 塞进同一个 JSON：14 张图就是 1.55 MB，而 base64 本身
+   多占 33%，GitHub Pages 又不压缩 JSON —— 观看者要干等十几秒才看到内容。
+   v3 改为：<id>.json 只存文字与图片引用（几 KB），图片各自一个 WebP 文件
+   （<id>/m0.webp …）。于是页面立刻渲染，图片并行流式加载，跟正常网站一样。
+   旧的 v2 链接继续可以打开。
+   ============================================================ */
+
+/** 发布时图片长边上限与 WebP 质量（比 JPEG 小很多，观感基本一致） */
+const MEDIA_MAX_EDGE = 1280
+const MEDIA_QUALITY = 0.72
+
+/** dataURL → { mime, base64 } */
+function splitDataUrl(url) {
+  const comma = url.indexOf(',')
+  const head = url.slice(5, comma)           // 去掉 "data:"
+  return {
+    mime: head.replace(';base64', ''),
+    base64: url.slice(comma + 1)
+  }
+}
+
+/** mime → 文件扩展名 */
+function extFor(mime) {
+  if (mime.includes('webp')) return 'webp'
+  if (mime.includes('png')) return 'png'
+  if (mime.includes('svg')) return 'svg'
+  if (mime.includes('gif')) return 'gif'
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg'
+  if (mime.includes('mp4')) return 'mp4'
+  if (mime.includes('webm')) return 'webm'
+  if (mime.includes('quicktime') || mime.includes('mov')) return 'mov'
+  return 'bin'
+}
+
+/**
+ * 把图片重新编码成 WebP（长边压到 MEDIA_MAX_EDGE 以内）
+ * 失败、或转出来反而更大时返回 null，调用方保留原图
+ * @param {string} dataURL 原图
+ * @returns {Promise<{base64: string, bytes: number}|null>}
+ */
+function encodeWebp(dataURL) {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') { resolve(null); return }
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, MEDIA_MAX_EDGE / Math.max(img.width, img.height))
+        const w = Math.max(1, Math.round(img.width * scale))
+        const h = Math.max(1, Math.round(img.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+        const out = canvas.toDataURL('image/webp', MEDIA_QUALITY)
+        if (!out.startsWith('data:image/webp')) { resolve(null); return } // 浏览器不支持时退回原图
+        const base64 = splitDataUrl(out).base64
+        resolve({ base64, bytes: Math.round(base64.length * 3 / 4) })
+      } catch {
+        resolve(null)
+      }
+    }
+    img.onerror = () => resolve(null)
+    img.src = dataURL
+  })
+}
+
+/**
+ * 把数据里的媒体抽出来单独成文件，正文里只留 "@序号" 引用
+ * @param {Object} data 完整作品集数据
+ * @returns {Promise<{payload: Object, files: {name: string, base64: string}[], mediaBytes: number}>}
+ */
+async function buildShareFiles(data) {
+  const compact = toCompact(data)
+  compact.v = 3
+  const files = []
+  const names = []
+  let mediaBytes = 0
+
+  /** 单个 dataURL → 文件 + 引用标记；非 dataURL（已是链接）原样返回 */
+  const put = async (value) => {
+    if (typeof value !== 'string' || !value.startsWith('data:')) return value
+    const { mime, base64 } = splitDataUrl(value)
+    let outBase64 = base64
+    let ext = extFor(mime)
+    if (mime.startsWith('image/') && !mime.includes('svg')) {
+      const webp = await encodeWebp(value)
+      const originBytes = Math.round(base64.length * 3 / 4)
+      if (webp && webp.bytes < originBytes) {
+        outBase64 = webp.base64
+        ext = 'webp'
+      }
+    }
+    mediaBytes += Math.round(outBase64.length * 3 / 4)
+    const name = `m${files.length}.${ext}`
+    files.push({ name, base64: outBase64 })
+    names.push(name)
+    return `@${files.length - 1}`
+  }
+
+  if (compact.a) {
+    if (compact.a.av) compact.a.av = await put(compact.a.av)
+    if (Array.isArray(compact.a.g)) {
+      for (let i = 0; i < compact.a.g.length; i++) compact.a.g[i] = await put(compact.a.g[i])
+    }
+  }
+  if (compact.c?.q) compact.c.q = await put(compact.c.q)
+  if (Array.isArray(compact.w)) {
+    for (const w of compact.w) {
+      if (Array.isArray(w[2])) for (let i = 0; i < w[2].length; i++) w[2][i] = await put(w[2][i])
+      if (Array.isArray(w[3])) for (let i = 0; i < w[3].length; i++) w[3][i] = await put(w[3][i])
+    }
+  }
+
+  return { payload: { ...compact, f: names, u: Date.now() }, files, mediaBytes }
+}
+
+/** 把 v3 载荷里的 "@序号" 还原成可直接渲染的图片地址 */
+function resolveMediaTokens(compact, base, version) {
+  const url = (token) => {
+    const name = compact.f?.[Number(String(token).slice(1))]
+    return name ? `${base}${name}?v=${version}` : ''
+  }
+  const walk = (value) => (typeof value === 'string' && value.startsWith('@') ? url(value) : value)
+
+  if (compact.a) {
+    if (compact.a.av) compact.a.av = walk(compact.a.av)
+    if (Array.isArray(compact.a.g)) compact.a.g = compact.a.g.map(walk)
+  }
+  if (compact.c?.q) compact.c.q = walk(compact.c.q)
+  if (Array.isArray(compact.w)) {
+    for (const w of compact.w) {
+      if (Array.isArray(w[2])) w[2] = w[2].map(walk)
+      if (Array.isArray(w[3])) w[3] = w[3].map(walk)
+    }
+  }
+  return compact
+}
+
 /**
  * 把作品集内容发布到仓库，得到（或更新）短链接
  *
- * 传了 existingId 就是"更新"：覆盖同一个 <id>.json，地址保持不变。
- * GitHub 覆盖文件必须带上当前文件的 sha，所以先查一次；查询与提交之间
- * 若文件被改动（sha 过期）会返回 409/422，这里自动重查重试一次。
+ * v3：文字与图片分开提交 —— 图片各存一个 WebP 文件，正文 JSON 只留引用，
+ * 一次发布只产生一个提交（Git Data API：blobs → tree → commit → 移动分支）。
+ * 传了 existingId 就是"更新"：同一个 id 覆盖，地址保持不变。
  *
  * @param {Object} data 完整作品集数据
  * @param {string} token GitHub Token（需勾选 Contents 读写）
  * @param {string} [existingId] 已存在的短 ID（不传则新建一个）
- * @returns {Promise<{id: string, url: string, path: string, updated: boolean}>}
- *          updated 为 true 表示覆盖更新，false 表示首次创建
+ * @param {Function} [onProgress] (text: string) => void 发布进度
+ * @returns {Promise<{id: string, url: string, updated: boolean, mediaBytes: number}>}
  */
-export async function publishShare(data, token, existingId) {
+export async function publishShare(data, token, existingId, onProgress) {
   const info = getShareRepo()
   if (!info) throw new Error('无法识别 GitHub 仓库，请先填写 仓库 owner/repo')
   if (!token) throw new Error('请先填写 GitHub Token')
 
   const id = existingId || shortId()
-  const path = `${SHARE_DIR}/${id}.json`
-  // u 为内容版本时间戳：观看端用它判断两个来源哪份更新
-  const payload = { ...toCompact(data), u: Date.now() }
-  const content = toBase64(JSON.stringify(payload))
 
-  let { sha } = await fetchFile(info, path, token)
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await putFile(
-      info, path, token, content, sha,
-      `${existingId ? 'update' : 'share'}: ${id}`
-    )
+  onProgress?.('正在压缩图片…')
+  const { payload, files, mediaBytes } = await buildShareFiles(data)
 
-    if (res.ok) {
-      // 顺手把"发布仓库"记到站点上，任何设备打开链接都能直读最新内容
-      await ensureSiteConfig(info, token)
-      return { id, url: buildShortUrl(id), path, updated: !!existingId }
-    }
+  onProgress?.(`正在上传 ${files.length + 1} 个文件…`)
+  await commitShare(info, token, id, payload, files, existingId)
 
-    // sha 过期（刚才有人改过同一个文件）→ 重新查一次再试
-    if ((res.status === 409 || res.status === 422) && attempt < 2) {
-      sha = (await fetchFile(info, path, token)).sha
-      continue
-    }
+  // 顺手把"发布仓库"记到站点上，任何设备打开链接都能直读最新内容
+  await ensureSiteConfig(info, token)
 
+  return { id, url: buildShortUrl(id), updated: !!existingId, mediaBytes }
+}
+
+/** GitHub API 调用（带中文错误提示） */
+async function ghApi(info, token, path, options = {}) {
+  const res = await fetch(`https://api.github.com/repos/${info.owner}/${info.repo}${path}`, {
+    method: options.method || 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(options.body ? { body: options.body } : {}),
+    cache: 'no-store'
+  })
+  if (!res.ok) {
     let detail = ''
     try {
       detail = (await res.json())?.message || ''
-    } catch { /* 忽略非 JSON 响应 */ }
+    } catch { /* 忽略 */ }
     throw new Error(apiHint(res.status) || `发布失败（HTTP ${res.status}${detail ? `：${detail}` : ''}）`)
   }
-  throw new Error('发布失败：文件被反复修改，请稍后重试')
+  return res.status === 204 ? null : res.json()
 }
 
 /**
- * 读取单个来源的分享文件（失败或超时返回 null）
- *
- * 超时按"等响应头"和"下载正文"两段算：内容里打包了 base64 图片，
- * 1~2 MB 很常见，慢网络下正文要几十秒；如果统一用一个短超时，
- * 会在下载途中被中断，页面就误报"分享内容不存在或已被删除"。
+ * 用 Git Data API 一次性提交正文与所有图片（只产生一个提交）
+ * 同时清理本次不再引用的旧图片文件
  */
-async function readShareFile(src) {
+async function commitShare(info, token, id, payload, files, existingId) {
+  const ref = await ghApi(info, token, `/git/ref/heads/${info.branch}`)
+  const head = ref.object.sha
+  const headCommit = await ghApi(info, token, `/git/commits/${head}`)
+  const baseTree = headCommit.tree.sha
+
+  /** 上一次发布留下的图片文件名（用于删除已不用的） */
+  let oldFiles = []
+  if (existingId) {
+    try {
+      const old = await fetchFile(info, `${SHARE_DIR}/${id}.json`, token)
+      if (old.text) {
+        const parsed = JSON.parse(old.text)
+        if (Array.isArray(parsed.f)) oldFiles = parsed.f
+      }
+    } catch { /* 旧的读不到就不清理，不影响本次发布 */ }
+  }
+
+  const tree = []
+  for (const f of files) {
+    const blob = await ghApi(info, token, '/git/blobs', {
+      method: 'POST',
+      body: JSON.stringify({ content: f.base64, encoding: 'base64' })
+    })
+    tree.push({ path: `${SHARE_DIR}/${id}/${f.name}`, mode: '100644', type: 'blob', sha: blob.sha })
+  }
+
+  const jsonBlob = await ghApi(info, token, '/git/blobs', {
+    method: 'POST',
+    body: JSON.stringify({ content: toBase64(JSON.stringify(payload)), encoding: 'base64' })
+  })
+  tree.push({ path: `${SHARE_DIR}/${id}.json`, mode: '100644', type: 'blob', sha: jsonBlob.sha })
+
+  // 新版没有引用的旧图片：置空即从目录里删掉（避免仓库里越堆越多）
+  const keep = new Set(files.map((f) => f.name))
+  for (const name of oldFiles) {
+    if (!keep.has(name)) {
+      tree.push({ path: `${SHARE_DIR}/${id}/${name}`, mode: '100644', type: 'blob', sha: null })
+    }
+  }
+
+  const newTree = await ghApi(info, token, '/git/trees', {
+    method: 'POST',
+    body: JSON.stringify({ base_tree: baseTree, tree })
+  })
+  const newCommit = await ghApi(info, token, '/git/commits', {
+    method: 'POST',
+    body: JSON.stringify({
+      message: `${existingId ? 'update' : 'share'}: ${id}`,
+      tree: newTree.sha,
+      parents: [head]
+    })
+  })
+  await ghApi(info, token, `/git/refs/heads/${info.branch}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ sha: newCommit.sha })
+  })
+}
+
+/**
+ * 读取单个来源的分享正文（失败或超时返回 null）
+ *
+ * 超时按"等响应头"和"下载正文"两段算：v3 之后正文只有几 KB，但旧的 v2
+ * 链接仍可能带着几 MB 的 base64 图片，慢网络下要几十秒，所以正文预算按
+ * content-length 放宽，避免在下载途中被中断、误报"内容不存在"。
+ * @param {string} src 地址
+ * @param {'site'|'raw'} source 来源标记（v3 用它决定图片走哪个域名）
+ * @returns {Promise<Object|null>} 正文对象（带 __source 标记）
+ */
+async function readShareFile(src, source) {
   const ctrl = new AbortController()
   let timer = setTimeout(() => ctrl.abort(), SOURCE_TIMEOUT)
   try {
@@ -523,7 +735,8 @@ async function readShareFile(src) {
     const budget = Math.min(BODY_TIMEOUT_MAX, Math.max(BODY_TIMEOUT_MIN, len / BODY_BYTES_PER_MS))
     timer = setTimeout(() => ctrl.abort(), budget)
     const obj = await res.json()
-    return obj && obj.v === 2 ? obj : null
+    if (!obj || (obj.v !== 2 && obj.v !== 3)) return null
+    return { ...obj, __source: source }
   } catch {
     return null
   } finally {
@@ -571,32 +784,58 @@ export async function loadSharedById(id) {
   const bust = `ts=${Date.now()}`
   const siteUrl = `${import.meta.env.BASE_URL}shares/${id}.json?${bust}`
 
-  const siteTask = readShareFile(siteUrl)
-  // 站点副本够新就直接用它：避免为了对比新旧把同样的几百 KB~几 MB 再下一遍
+  const siteTask = readShareFile(siteUrl, 'site')
+  // 站点副本够新就直接用它：避免为了对比新旧把同样的内容再下一遍
   const rawTask = siteTask.then((site) => {
-    if (site && Date.now() - (site.u || 0) < SITE_FRESH_MS) return null
+    const obj = site?.obj
+    if (obj && Date.now() - (obj.u || 0) < SITE_FRESH_MS) return null
     return resolveReadRepo().then((repo) => {
       if (!repo) return null
       return readShareFile(
-        `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}.json?${bust}`
+        `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}.json?${bust}`,
+        'raw'
       )
     })
   })
 
   const picked = await pickNewest([siteTask, rawTask])
-  return picked ? fromCompact(picked) : null
+  if (!picked) return null
+
+  // v3：正文里的 "@序号" 是图片引用，按"正文是从哪读到的"拼出图片地址
+  if (picked.v === 3) {
+    const repo = getShareRepo()
+    const base = picked.__source === 'raw' && repo
+      ? `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}/`
+      : `${import.meta.env.BASE_URL}shares/${id}/`
+    return fromCompact(resolveMediaTokens(picked, base, picked.u || 0))
+  }
+
+  // v2（旧链接）：图片仍在正文里
+  return fromCompact(picked)
 }
 
 /**
- * 估算发布后的内容体积（字节）
- * 图片以 base64 存在内容里，作品图片多时能到几 MB，读取本身要花十几秒；
- * 分享弹窗用它给出提示，避免用户以为链接坏了
+ * 估算发布后的内容体积（字节）：正文 + 图片（不含 base64 膨胀）
+ * 图片发布时会转成 WebP 并单独存放，这里按原图体积给个上界
  * @param {Object} data 完整作品集数据
  * @returns {number} 字节数（出错返回 0）
  */
 export function estimateShareSize(data) {
   try {
-    return JSON.stringify({ ...toCompact(data), u: Date.now() }).length
+    const compact = toCompact(data)
+    let media = 0
+    const count = (val) => {
+      if (typeof val !== 'string' || !val.startsWith('data:')) return
+      media += Math.round((val.length - val.indexOf(',')) * 3 / 4)
+    }
+    count(compact.a?.av)
+    ;(compact.a?.g || []).forEach(count)
+    count(compact.c?.q)
+    ;(compact.w || []).forEach((w) => {
+      (w[2] || []).forEach(count)
+      ;(w[3] || []).forEach(count)
+    })
+    return JSON.stringify(compact).length + media
   } catch {
     return 0
   }

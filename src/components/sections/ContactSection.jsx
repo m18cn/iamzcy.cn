@@ -97,7 +97,7 @@ export default function ContactSection({ contact, update, preview, onToast }) {
         <div className="qr-box card-parent" onClick={pickQr}>
           <div className="qr-inner">
             {contact.qrCode ? (
-              <img src={contact.qrCode} alt="联系二维码" />
+              <img src={contact.qrCode} alt="联系二维码" loading="lazy" decoding="async" />
             ) : (
               <>
                 <span style={{ fontSize: 28, fontWeight: 300 }}>+</span>

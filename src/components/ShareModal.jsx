@@ -32,6 +32,7 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
   const [repoInput, setRepoInput] = useState('')
   const [adoptInput, setAdoptInput] = useState('')
   const [publishing, setPublishing] = useState(false)
+  const [stage, setStage] = useState('')
   const [error, setError] = useState('')
 
   /** 当前使用的仓库（自定义域名下手动填的那份 localStorage 覆盖值） */
@@ -94,21 +95,26 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
     if (publishing) return
     setError('')
     setPublishing(true)
+    setStage('')
     try {
       setPublishToken(token.trim())
-      const res = await publishShare(data, token.trim(), shareId)
+      const res = await publishShare(data, token.trim(), shareId, setStage)
       onShareChange({ id: res.id, updatedAt: Date.now() })
+      const sizeText = res.mediaBytes
+        ? `（图片 ${(res.mediaBytes / 1024 / 1024).toFixed(2)} MB，打开更快了）`
+        : ''
       if (res.updated) {
-        onToast('内容已更新，地址不变')
+        onToast(`内容已更新，地址不变${sizeText}`)
       } else {
         // 第一次生成：顺手复制，省一步操作
         const ok = await copyToClipboard(res.url)
-        onToast(ok ? '短链接已生成并复制' : '短链接已生成')
+        onToast(ok ? `短链接已生成并复制${sizeText}` : `短链接已生成${sizeText}`)
       }
     } catch (e) {
       setError(e?.message || '发布失败，请稍后重试')
     } finally {
       setPublishing(false)
+      setStage('')
     }
   }
 
@@ -217,11 +223,11 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
 
           {error && <p className="share-err">{error}</p>}
 
-          {sizeMB > 0.5 && (
+          {sizeMB > 0.4 && (
             <p className="share-tip">
-              当前内容约 <b>{sizeMB.toFixed(1)} MB</b>（图片以 base64 一起打包）：
-              观看者首次打开需要十几秒，网络较慢时更久 —— 这是正常的，
-              页面会显示"正在打开…"，不是链接失效。想让打开更快，可以减少作品图片数量或尺寸。
+              当前内容约 <b>{sizeMB.toFixed(1)} MB</b>：发布时图片会自动转成 WebP 并
+              拆成独立文件，正文只有几 KB —— 观看者打开页面几乎瞬间出内容，
+              图片随后并行加载。图片体积越大、加载越慢，但仍比整包一起下载快得多。
             </p>
           )}
 
@@ -231,7 +237,7 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
               onClick={handlePublish}
               disabled={publishing || !token.trim()}
             >
-              {publishing ? '发布中…' : shortUrl ? '更新内容' : '生成短链接'}
+              {publishing ? (stage || '发布中…') : shortUrl ? '更新内容' : '生成短链接'}
             </button>
             <a
               className="share-link-out"
