@@ -55,28 +55,58 @@ export default function App() {
   const [colorOpen, setColorOpen] = useState(false)
   /** 短链接重新加载计数（加载失败页的"重新加载"按钮用） */
   const [shortReloadKey, setShortReloadKey] = useState(0)
+  /** 分享内容读取时间较长（内容大 / 网络慢）时的提示 */
+  const [shortSlow, setShortSlow] = useState(false)
 
   /** 是否只读（分享访问或预览模式） */
   const readonly = !!shareData || mode === MODE.PREVIEW
   /** 当前渲染的数据来源（分享数据或本地编辑数据） */
   const viewData = shareData || data
 
-  // 短链接访问（#/s/<id>）：异步取回已发布到仓库的内容
+  /**
+   * 短链接访问（#/s/<id>）：异步取回已发布到仓库的内容
+   *
+   * 内容里带 base64 图片，作品图片多时有 1~2 MB，网络慢时下载要十几秒；
+   * 刚发布时站点副本还要等一次部署（约 1 分钟）。所以这里：
+   * - 超过 4 秒仍在读 → 提示"内容较大，请稍等"（避免误以为链接坏了）
+   * - 一次读不到 → 4 秒后自动重试一次（覆盖"刚发布还没部署完"的情况）
+   */
   useEffect(() => {
     const id = readShortIdFromLocation()
     if (!id) return
     let alive = true
+    let retryTimer = null
     setShortState('loading')
-    loadSharedById(id).then((shared) => {
-      if (!alive) return
-      if (shared) {
+    setShortSlow(false)
+    const slowTimer = setTimeout(() => { if (alive) setShortSlow(true) }, 4000)
+
+    const attempt = (n) => {
+      const fail = () => {
+        if (!alive) return
+        if (n < 1) {
+          retryTimer = setTimeout(() => { if (alive) attempt(n + 1) }, 4000)
+        } else {
+          setShortState('error')
+        }
+      }
+      loadSharedById(id).then((shared) => {
+        if (!alive) return
+        if (!shared) {
+          fail()
+          return
+        }
         setShareData(shared)
         setShortState('ready')
-      } else {
-        setShortState('error')
-      }
-    })
-    return () => { alive = false }
+        setShortSlow(false)
+      }).catch(fail)
+    }
+    attempt(0)
+
+    return () => {
+      alive = false
+      clearTimeout(retryTimer)
+      clearTimeout(slowTimer)
+    }
   }, [shortReloadKey])
 
   // 主题色同步到 CSS 变量
@@ -262,6 +292,11 @@ export default function App() {
         <div className="share-loading">
           <span className="share-loading-dot" />
           正在打开分享的作品集…
+          {shortSlow && (
+            <p className="share-loading-tip">
+              内容里包含图片，体积较大时首次打开需要十几秒，请稍等…
+            </p>
+          )}
         </div>
       </>
     )
@@ -272,10 +307,10 @@ export default function App() {
       <>
         {backdrop}
         <div className="share-loading error">
-          <p className="share-loading-title">分享内容不存在或已被删除</p>
+          <p className="share-loading-title">暂时读不到分享内容</p>
           <p className="share-loading-tip">
-            请确认链接是否完整。如果分享者刚更新过内容（或刚部署完站点），
-            稍等片刻重新加载就好。
+            常见原因：内容刚发布、站点还在部署（约 1 分钟），或者当前网络较慢。
+            稍等片刻点「重新加载」通常就能打开；如果一直打不开，请让分享者重新确认一次地址。
           </p>
           <div className="share-loading-actions">
             <button className="btn btn-primary" onClick={() => setShortReloadKey((k) => k + 1)}>

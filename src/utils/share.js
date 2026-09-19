@@ -209,15 +209,26 @@ const CONFIG_PATH = `${SHARE_DIR}/config.json`
 /** 站点配置的页面内缓存（一次加载只取一次） */
 let siteRepoCache
 
-/** 读取单个来源的超时时间（毫秒）：raw 域名在部分地区会被墙，不能让页面卡住 */
-const SOURCE_TIMEOUT = 6000
+/**
+ * 读取单个来源的超时时间（毫秒）—— 等响应头的上限
+ * 超出说明这个来源不通（网络被墙 / 域名解析不了），不必再等
+ */
+const SOURCE_TIMEOUT = 20000
+
+/** 正文下载预算：最小 20 秒，按体积放宽（约 40 KB/s 的保守速度），最多 2 分钟 */
+const BODY_TIMEOUT_MIN = 20000
+const BODY_TIMEOUT_MAX = 120000
+const BODY_BYTES_PER_MS = 0.04
 
 /**
  * 首个来源返回后，再等一小会儿其它来源的宽限时间（毫秒）：
  * 刚更新完内容时，站点上的副本可能还是上一次部署的旧版，
  * 而仓库直读（raw）已是新内容 —— 这点时间刚好能把更新的那份挑出来
  */
-const SOURCE_GRACE = 1200
+const SOURCE_GRACE = 1500
+
+/** 站点副本的版本号比这个时间还新（毫秒）时，认为它已经是最新版，不再直读仓库（省一半流量） */
+const SITE_FRESH_MS = 3 * 60 * 1000
 
 /**
  * 自动推导当前站点的 GitHub 仓库（GitHub Pages 形如 <owner>.github.io/<repo>/）
@@ -493,13 +504,24 @@ export async function publishShare(data, token, existingId) {
   throw new Error('发布失败：文件被反复修改，请稍后重试')
 }
 
-/** 读取单个来源的分享文件（失败或超时返回 null） */
+/**
+ * 读取单个来源的分享文件（失败或超时返回 null）
+ *
+ * 超时按"等响应头"和"下载正文"两段算：内容里打包了 base64 图片，
+ * 1~2 MB 很常见，慢网络下正文要几十秒；如果统一用一个短超时，
+ * 会在下载途中被中断，页面就误报"分享内容不存在或已被删除"。
+ */
 async function readShareFile(src) {
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), SOURCE_TIMEOUT)
+  let timer = setTimeout(() => ctrl.abort(), SOURCE_TIMEOUT)
   try {
     const res = await fetch(src, { cache: 'no-store', signal: ctrl.signal })
     if (!res.ok) return null
+    // 响应头已到：按内容体积重新算一次下载预算（慢速也允许读完）
+    clearTimeout(timer)
+    const len = Number(res.headers.get('content-length') || 0)
+    const budget = Math.min(BODY_TIMEOUT_MAX, Math.max(BODY_TIMEOUT_MIN, len / BODY_BYTES_PER_MS))
+    timer = setTimeout(() => ctrl.abort(), budget)
     const obj = await res.json()
     return obj && obj.v === 2 ? obj : null
   } catch {
@@ -538,8 +560,9 @@ function pickNewest(promises) {
 
 /**
  * 按短 ID 取回已发布的内容
- * 两个来源并发：仓库直读（raw，发布后立刻生效）与站点上的副本
- * （<base>/shares/<id>.json，等 Actions 重新部署后才更新）。
+ * 两个来源：站点上的副本（<base>/shares/<id>.json）与仓库直读（raw）。
+ * - 站点副本先取：同一个域名，通常最快
+ * - 它若是 404（刚发布还没部署）或版本号较旧（3 分钟以外），再去读仓库拿最新版
  * 取版本号更新的那份，并强制绕过 CDN 缓存，所以刷新就是最新内容。
  * @param {string} id 短 ID
  * @returns {Promise<Object|null>}
@@ -547,17 +570,36 @@ function pickNewest(promises) {
 export async function loadSharedById(id) {
   const bust = `ts=${Date.now()}`
   const siteUrl = `${import.meta.env.BASE_URL}shares/${id}.json?${bust}`
-  // 站点副本立刻开始取；仓库直读要先知道仓库名（可能要读一次站点配置）
+
   const siteTask = readShareFile(siteUrl)
-  const rawTask = resolveReadRepo().then((repo) => {
-    if (!repo) return null
-    return readShareFile(
-      `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}.json?${bust}`
-    )
+  // 站点副本够新就直接用它：避免为了对比新旧把同样的几百 KB~几 MB 再下一遍
+  const rawTask = siteTask.then((site) => {
+    if (site && Date.now() - (site.u || 0) < SITE_FRESH_MS) return null
+    return resolveReadRepo().then((repo) => {
+      if (!repo) return null
+      return readShareFile(
+        `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.branch}/${SHARE_DIR}/${id}.json?${bust}`
+      )
+    })
   })
 
   const picked = await pickNewest([siteTask, rawTask])
   return picked ? fromCompact(picked) : null
+}
+
+/**
+ * 估算发布后的内容体积（字节）
+ * 图片以 base64 存在内容里，作品图片多时能到几 MB，读取本身要花十几秒；
+ * 分享弹窗用它给出提示，避免用户以为链接坏了
+ * @param {Object} data 完整作品集数据
+ * @returns {number} 字节数（出错返回 0）
+ */
+export function estimateShareSize(data) {
+  try {
+    return JSON.stringify({ ...toCompact(data), u: Date.now() }).length
+  } catch {
+    return 0
+  }
 }
 
 /**

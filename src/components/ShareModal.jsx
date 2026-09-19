@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   copyToClipboard, publishShare, getPublishToken, setPublishToken,
-  getShareRepo, setShareRepo, buildShortUrl, parseShareId
+  getShareRepo, setShareRepo, buildShortUrl, parseShareId, estimateShareSize
 } from '../utils/share'
 
 /** 时间戳 → 「2026-09-18 02:40」 */
@@ -38,6 +38,8 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
   const repo = getShareRepo()
   const shareId = share?.id || ''
   const shortUrl = shareId ? buildShortUrl(shareId) : ''
+  /** 发布体积估算（图片多时会到 1~2 MB，读取要十几秒，提前告诉用户） */
+  const sizeMB = useMemo(() => estimateShareSize(data) / 1024 / 1024, [data])
 
   /** 复制指定文本并给出反馈 */
   const copy = async (text, mark) => {
@@ -214,6 +216,14 @@ export default function ShareModal({ data, share, onShareChange, onClose, onToas
           </p>
 
           {error && <p className="share-err">{error}</p>}
+
+          {sizeMB > 0.5 && (
+            <p className="share-tip">
+              当前内容约 <b>{sizeMB.toFixed(1)} MB</b>（图片以 base64 一起打包）：
+              观看者首次打开需要十几秒，网络较慢时更久 —— 这是正常的，
+              页面会显示"正在打开…"，不是链接失效。想让打开更快，可以减少作品图片数量或尺寸。
+            </p>
+          )}
 
           <div className="share-actions">
             <button
